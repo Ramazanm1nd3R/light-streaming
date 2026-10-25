@@ -1,0 +1,44 @@
+{
+  "name": "light-streaming",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Light Streaming — совместный просмотр на базе Hyperbeam: свой мобильный интерфейс, голос и чат, сервер живёт только на ноутбуке ведущего.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c magenta,cyan \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "npm run build && NODE_ENV=production tsx server/index.ts",
+    "watch": "npm run build && NODE_ENV=production AUTO_ROOM=1 tsx server/index.ts",
+    "serve": "NODE_ENV=production tsx server/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hyperbeam/web": "0.0.38",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "lucide-react": "^0.545.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tsx": "^4.20.6",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.32",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.9.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.11"
+  }
+}

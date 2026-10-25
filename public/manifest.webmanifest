@@ -1,0 +1,10 @@
+{
+  "name": "Light Streaming",
+  "short_name": "Light",
+  "description": "Совместный просмотр с голосом и чатом",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#07080c",
+  "theme_color": "#07080c",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
