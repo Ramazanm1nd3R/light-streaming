@@ -1,0 +1,2634 @@
+/* ============================================================
+   Light Streaming — тёмная «стеклянная» тема.
+   Принцип: видео главное. Всё остальное — полупрозрачные слои,
+   которые либо живут в свободном месте, либо прячутся сами.
+   ============================================================ */
+
+:root {
+  --bg: #07080c;
+  --surface: rgba(18, 20, 27, 0.86);
+  --glass: rgba(255, 255, 255, 0.09);
+  --glass-strong: rgba(255, 255, 255, 0.16);
+  --stroke: rgba(255, 255, 255, 0.08);
+  --text: #f3f4f8;
+  --muted: #9aa1b2;
+  --accent: #5b72ff;
+  --accent-2: #8fa2ff;
+  --danger: #f2404b;
+  --ok: #34d27b;
+  --warn: #ffb547;
+  --gold: #ffcc4d;
+  --radius: 18px;
+  --chat-alpha: 0.42;
+
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overscroll-behavior: none;
+}
+
+body {
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.center {
+  text-align: center;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   Базовые элементы
+   ============================================================ */
+
+.ibtn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  transition:
+    background 0.15s,
+    transform 0.12s,
+    color 0.15s;
+}
+
+.ibtn:active {
+  transform: scale(0.93);
+}
+
+.ibtn--sm {
+  width: 34px;
+  height: 34px;
+}
+
+.ibtn--md {
+  width: 46px;
+  height: 46px;
+}
+
+.ibtn--lg {
+  width: 56px;
+  height: 56px;
+}
+
+.ibtn--glass {
+  background: rgba(22, 24, 32, 0.55);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+}
+
+.ibtn--glass:hover {
+  background: rgba(40, 43, 56, 0.7);
+}
+
+.ibtn--solid {
+  background: #f3f4f8;
+  color: #0b0d12;
+}
+
+.ibtn--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ibtn--danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.ibtn--ghost {
+  color: var(--muted);
+}
+
+.ibtn--ghost:hover {
+  color: var(--text);
+  background: var(--glass);
+}
+
+.ibtn__badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    filter 0.15s,
+    transform 0.12s;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, #6a7fff, var(--accent));
+  color: #fff;
+  box-shadow: 0 6px 20px -8px rgba(91, 114, 255, 0.8);
+}
+
+.btn--glass {
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+}
+
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn--wide {
+  width: 100%;
+}
+
+.btn--lg {
+  height: 52px;
+  font-size: 16px;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 45%, #0b0d12));
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 2px var(--bg);
+  user-select: none;
+  transition: box-shadow 0.2s;
+}
+
+.avatar--speaking {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--ok);
+  animation: speak 1.2s ease-in-out infinite;
+}
+
+@keyframes speak {
+  50% {
+    box-shadow:
+      0 0 0 2px var(--bg),
+      0 0 0 5px var(--ok),
+      0 0 14px 4px rgba(52, 210, 123, 0.35);
+  }
+}
+
+.avatar--more {
+  background: var(--glass-strong);
+  font-weight: 600;
+}
+
+.avatar__badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 42%;
+  height: 42%;
+  min-width: 15px;
+  min-height: 15px;
+  border-radius: 50%;
+  background: #2a2d38;
+  color: #ff8a8a;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.avatar-row {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatar-row > .avatar + .avatar {
+  margin-left: -5px;
+}
+
+.crown {
+  margin-left: 6px;
+  color: var(--gold);
+  vertical-align: -2px;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.2s;
+}
+
+.switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s;
+}
+
+.switch--on {
+  background: var(--accent);
+}
+
+.switch--on .switch__thumb {
+  transform: translateX(18px);
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+  --pct: 50%;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #fff var(--pct), rgba(255, 255, 255, 0.22) var(--pct));
+}
+
+.slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #fff var(--pct), rgba(255, 255, 255, 0.22) var(--pct));
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  font-size: 13px;
+}
+
+.chip--on {
+  border-color: var(--accent);
+  background: rgba(91, 114, 255, 0.18);
+}
+
+.chips__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.note {
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--glass);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.note--accent {
+  background: rgba(91, 114, 255, 0.14);
+  color: #c9d1ff;
+}
+
+.note--error {
+  background: rgba(242, 64, 75, 0.14);
+  color: #ffb3b8;
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.dot--on {
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(52, 210, 123, 0.7);
+}
+
+.dot--warn {
+  background: var(--warn);
+}
+
+/* ============================================================
+   Стартовые экраны
+   ============================================================ */
+
+.screen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: var(--app-h, 100dvh);
+  height: var(--app-h, 100dvh);
+  padding: calc(var(--safe-t) + 24px) 18px calc(var(--safe-b) + 24px);
+  overflow-y: auto;
+}
+
+.screen__glow {
+  position: fixed;
+  inset: -20% -10% auto;
+  height: 70%;
+  background:
+    radial-gradient(40% 50% at 30% 40%, rgba(91, 114, 255, 0.28), transparent 70%),
+    radial-gradient(35% 45% at 75% 30%, rgba(255, 122, 168, 0.16), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+.screen__card {
+  position: relative;
+  display: grid;
+  /* minmax(0, …): длинный адрес туннеля не должен распирать карточку шире экрана */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: min(440px, 100%);
+}
+
+.screen--splash .logo {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.screen__title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field input {
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+}
+
+.field small {
+  font-size: 12px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.segmented button {
+  height: 36px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.segmented .is-on {
+  background: var(--glass-strong);
+  color: var(--text);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.row > span {
+  font-size: 14px;
+}
+
+.row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.row .slider {
+  width: 44%;
+}
+
+.row--plain {
+  border: 0;
+  padding: 4px 2px;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+
+.swatch.is-on {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 5px #fff;
+  transform: scale(1.05);
+}
+
+.join-preview {
+  display: grid;
+  place-items: center;
+  margin-top: 8px;
+}
+
+.mic-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.mic-toggle.is-on {
+  color: #b8f5d2;
+  border-color: rgba(52, 210, 123, 0.35);
+  background: rgba(52, 210, 123, 0.1);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.tunnel {
+  color: var(--muted);
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.tunnel::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  vertical-align: 1px;
+}
+
+.tunnel--ready::before {
+  background: var(--ok);
+}
+
+.tunnel--starting::before {
+  background: var(--warn);
+}
+
+.tunnel--missing::before,
+.tunnel--error::before {
+  background: var(--danger);
+}
+
+.waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ============================================================
+   Комната — общее
+   ============================================================ */
+
+.room {
+  position: relative;
+  height: var(--app-h, 100dvh);
+  overflow: hidden;
+  background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.room input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 15;
+}
+
+.topbar__title {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+
+.topbar__title strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.topbar__sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.net {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.55);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.net__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+
+.net__bars i {
+  width: 3px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.net__bars i:nth-child(1) {
+  height: 4px;
+}
+.net__bars i:nth-child(2) {
+  height: 7px;
+}
+.net__bars i:nth-child(3) {
+  height: 10px;
+}
+
+.net--good .net__bars i {
+  background: var(--ok);
+}
+
+.net--ok .net__bars i:nth-child(-n + 2) {
+  background: var(--warn);
+}
+
+.net--bad .net__bars i:nth-child(1) {
+  background: var(--danger);
+}
+
+.avatar-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.55);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.avatar-stack .avatar {
+  box-shadow: 0 0 0 2px #15171e;
+}
+
+.avatar-stack__plus {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--glass-strong);
+}
+
+/* ---------- видео ---------- */
+
+.stage {
+  position: relative;
+}
+
+.stage__box {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+}
+
+.stage__hb {
+  position: absolute;
+  inset: 0;
+}
+
+.stage__gestures {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  touch-action: manipulation;
+}
+
+.player-keys {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 6vw, 40px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.96);
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+
+.player-keys.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+
+.player-keys button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(10, 11, 16, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.player-keys .player-keys__main {
+  width: 62px;
+  height: 62px;
+}
+
+.player-keys__play {
+  margin-left: 3px;
+}
+
+.control-pill {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(91, 114, 255, 0.82);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+.control-pill.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.seek-ripple {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-top: -42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+  animation: ripple 0.65s ease-out forwards;
+}
+
+.seek-ripple--left {
+  left: 14%;
+}
+.seek-ripple--right {
+  right: 14%;
+}
+.seek-ripple--center {
+  left: 50%;
+  margin-left: -42px;
+}
+
+@keyframes ripple {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+.reactions-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.float-emoji {
+  position: absolute;
+  bottom: 6%;
+  font-size: clamp(26px, 4vw, 38px);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+  animation: float-up 2.6s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.1);
+  }
+  50% {
+    transform: translate(10px, -90px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-6px, -200px) scale(0.9);
+  }
+}
+
+.stage__status {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(7, 8, 12, 0.72);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.stage__status--soft {
+  background: rgba(7, 8, 12, 0.3);
+}
+
+.stage-corner {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.stage-corner.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* демо-заглушка вместо облачного браузера */
+.demo-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #4a86e8 0%, #7fb0f5 55%, #c4dcfb 100%);
+}
+
+.demo-screen__sun {
+  position: absolute;
+  top: 12%;
+  right: 16%;
+  width: 14%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff8d6 0%, rgba(255, 248, 214, 0.35) 55%, transparent 70%);
+}
+
+.demo-cloud {
+  position: absolute;
+  height: 18%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  filter: blur(6px);
+  animation: drift 26s linear infinite;
+}
+
+.demo-cloud--a {
+  top: 20%;
+  width: 32%;
+  animation-duration: 30s;
+}
+.demo-cloud--b {
+  top: 52%;
+  width: 46%;
+  animation-duration: 42s;
+  animation-delay: -18s;
+}
+.demo-cloud--c {
+  top: 70%;
+  width: 26%;
+  animation-duration: 24s;
+  animation-delay: -9s;
+}
+
+@keyframes drift {
+  from {
+    transform: translateX(-60%);
+    left: 0;
+  }
+  to {
+    transform: translateX(0);
+    left: 100%;
+  }
+}
+
+.demo-screen__label {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  display: grid;
+  gap: 2px;
+  max-width: 86%;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(10, 12, 20, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 12px;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.demo-screen__label span {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- чат ---------- */
+
+.chat-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.chat-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 260px;
+  margin: auto;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.msg-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 88%;
+  animation: msg-in 0.2s ease-out;
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.msg-group--mine {
+  flex-direction: row-reverse;
+  align-self: flex-end;
+}
+
+.msg-group__body {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.msg-group--mine .msg-group__body {
+  justify-items: end;
+}
+
+.msg-group__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.msg-group__name {
+  font-weight: 600;
+  color: var(--accent-2);
+}
+
+.msg-group__time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.bubble {
+  max-width: 100%;
+  padding: 7px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 14.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.msg-group:not(.msg-group--mine) .msg-group__meta + .msg .bubble {
+  border-top-left-radius: 6px;
+}
+
+.msg-group--mine .bubble {
+  background: linear-gradient(180deg, #6a7fff, #4f66f5);
+  color: #fff;
+}
+
+.msg-group--mine .msg-group__meta + .msg .bubble {
+  border-top-right-radius: 6px;
+}
+
+.composer-wrap {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(30, 32, 42, 0.72);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.composer input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  /* 16px — меньше iOS начинает зумить страницу при фокусе */
+  font-size: 16px;
+}
+
+.composer input::placeholder {
+  color: var(--muted);
+}
+
+.composer__emoji,
+.composer__send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.composer__emoji {
+  color: var(--muted);
+  background: var(--glass);
+}
+
+.composer__emoji.is-on {
+  color: #fff;
+  background: var(--accent);
+}
+
+.composer__send {
+  background: var(--accent);
+  color: #fff;
+  transition: opacity 0.15s;
+}
+
+.reaction-picker {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.82);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: pop 0.16s ease-out;
+}
+
+.reaction-picker button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 22px;
+  transition: transform 0.12s;
+}
+
+.reaction-picker button:active {
+  transform: scale(1.3);
+}
+
+.reaction-picker--float {
+  position: absolute;
+  bottom: 58px;
+  left: 0;
+  z-index: 30;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+.chat-toasts {
+  position: absolute;
+  left: calc(var(--safe-l) + 16px);
+  bottom: calc(var(--safe-b) + 96px);
+  z-index: 12;
+  display: grid;
+  gap: 6px;
+  max-width: min(360px, 60vw);
+  pointer-events: none;
+  transition: bottom 0.25s;
+}
+
+.chat-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 12px 7px 7px;
+  border-radius: 16px;
+  background: rgba(10, 11, 16, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: toast-in 0.25s ease-out;
+  font-size: 13.5px;
+}
+
+.chat-toast__name {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.chat-toast__text {
+  overflow-wrap: anywhere;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+.toasts {
+  position: absolute;
+  top: calc(var(--safe-t) + 64px);
+  left: 50%;
+  z-index: 60;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 90vw;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.toast {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(20, 22, 30, 0.88);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 13px;
+  text-align: center;
+  animation: pop 0.2s ease-out;
+}
+
+.toast--warn {
+  border-color: rgba(255, 181, 71, 0.45);
+  color: #ffd99c;
+}
+
+.toast--error {
+  border-color: rgba(242, 64, 75, 0.45);
+  color: #ffb3b8;
+}
+
+/* ============================================================
+   Вертикальный телефон: видео сверху, чат в свободном месте под ним.
+   Ничего не перекрывает картинку.
+   ============================================================ */
+
+.room--portrait {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.room--portrait .topbar {
+  flex: none;
+  padding: calc(var(--safe-t) + 8px) 14px 10px;
+}
+
+.stage-slot,
+.room--portrait .stage {
+  flex: none;
+}
+
+.room--portrait .stage__box {
+  width: 100%;
+}
+
+.room--portrait .player-keys button {
+  width: 44px;
+  height: 44px;
+}
+
+.room--portrait .player-keys .player-keys__main {
+  width: 56px;
+  height: 56px;
+}
+
+.portrait-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(91, 114, 255, 0.05), transparent 40%);
+}
+
+.room--portrait .composer-wrap {
+  flex: none;
+  padding: 6px 12px 8px;
+}
+
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 4px 14px calc(var(--safe-b) + 10px);
+}
+
+.dock__people {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* при открытой клавиатуре место нужнее чату */
+.room--portrait.is-typing .dock {
+  display: none;
+}
+
+.room--portrait.is-typing .composer-wrap {
+  padding-bottom: calc(var(--safe-b) + 8px);
+}
+
+/* ============================================================
+   Горизонтальный телефон и компьютер: видео на весь экран,
+   интерфейс — полупрозрачные слои, которые сами прячутся.
+   ============================================================ */
+
+.theater {
+  position: absolute;
+  inset: 0;
+  transition: right 0.25s ease;
+}
+
+.theater .stage {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+
+.theater .stage__box {
+  width: min(100cqw, calc(100cqh * 16 / 9));
+}
+
+.room--landscape .topbar,
+.room--desktop .topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(var(--safe-t) + 10px) calc(var(--safe-r) + 16px) 30px calc(var(--safe-l) + 16px);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.62), transparent);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.control-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 30px calc(var(--safe-r) + 16px) calc(var(--safe-b) + 12px) calc(var(--safe-l) + 16px);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+}
+
+.control-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.control-bar__people {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.picker-anchor {
+  position: relative;
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 10px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.55);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.volume .slider {
+  width: 96px;
+}
+
+.side-rail {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--safe-r) + 12px);
+  z-index: 14;
+  display: grid;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.4);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transform: translateY(-50%);
+}
+
+.side-rail .ibtn--glass {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+}
+
+.chat-open .side-rail {
+  display: none;
+}
+
+/* Чат поверх видео: полупрозрачная панель. Плотность фона и размытие регулируются
+   ползунком в меню — можно сделать почти невидимой, сообщения останутся читаемыми. */
+.chat-panel {
+  position: absolute;
+  top: calc(var(--safe-t) + 62px);
+  right: calc(var(--safe-r) + 10px);
+  bottom: calc(var(--safe-b) + 86px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, 40vw);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(10, 11, 16, var(--chat-alpha));
+  backdrop-filter: blur(calc(var(--chat-alpha) * 18px)) saturate(1.2);
+  -webkit-backdrop-filter: blur(calc(var(--chat-alpha) * 18px)) saturate(1.2);
+  overflow: hidden;
+  animation: slide-in 0.22s ease-out;
+  transition:
+    top 0.25s,
+    bottom 0.25s;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.chat-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.chat-panel .bubble {
+  background: rgba(20, 22, 30, 0.6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.chat-panel .msg-group--mine .bubble {
+  background: linear-gradient(180deg, rgba(106, 127, 255, 0.92), rgba(79, 102, 245, 0.92));
+}
+
+.chat-panel .msg-group__meta {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.chat-panel .composer-wrap {
+  padding: 8px;
+}
+
+.chat-panel .reaction-picker {
+  flex-wrap: wrap;
+  justify-content: center;
+  border-radius: 20px;
+}
+
+/* кнопки плеера сдвигаются в видимую часть кадра, чтобы чат их не накрывал */
+.room--landscape.chat-open .player-keys {
+  left: calc(50% - min(170px, 20vw));
+}
+
+/* когда интерфейс спрятан — чат вытягивается на всю высоту */
+.room--landscape.is-idle .chat-panel {
+  top: calc(var(--safe-t) + 10px);
+  bottom: calc(var(--safe-b) + 10px);
+}
+
+.room--landscape.is-idle .chat-toasts,
+.room--desktop.is-idle .chat-toasts {
+  bottom: calc(var(--safe-b) + 18px);
+}
+
+/* автоскрытие */
+.room--landscape .topbar,
+.room--desktop .topbar,
+.control-bar,
+.side-rail {
+  transition:
+    opacity 0.25s,
+    transform 0.25s;
+}
+
+.is-idle .topbar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+}
+
+.is-idle .control-bar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+
+.is-idle .side-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.room--desktop.is-idle {
+  cursor: none;
+}
+
+/* Компьютер: чат закрепляется сбоку, а видео ужимается — ничего не перекрыто. */
+.room--desktop.chat-open .theater,
+.room--desktop.chat-open .topbar,
+.room--desktop.chat-open .control-bar {
+  right: 360px;
+}
+
+.room--desktop .chat-panel {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  border-radius: 0;
+  border: 0;
+  border-left: 1px solid var(--stroke);
+  background: #0c0e14;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.room--desktop .chat-panel .bubble {
+  background: rgba(255, 255, 255, 0.07);
+  text-shadow: none;
+}
+
+/* низкий горизонтальный телефон — убираем второстепенное */
+@media (max-height: 430px) {
+  .volume .slider {
+    display: none;
+  }
+  .volume {
+    padding-right: 0;
+  }
+  .control-bar {
+    padding-top: 22px;
+    padding-bottom: calc(var(--safe-b) + 8px);
+  }
+  .control-bar .ibtn--md {
+    width: 42px;
+    height: 42px;
+  }
+  .chat-panel {
+    bottom: calc(var(--safe-b) + 72px);
+    top: calc(var(--safe-t) + 54px);
+  }
+}
+
+@media (max-width: 720px) and (max-height: 430px) {
+  .control-bar__people {
+    display: none;
+  }
+}
+
+/* ============================================================
+   Шторки: без затемнения фона, видео продолжает идти
+   ============================================================ */
+
+.sheet-dismiss {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+}
+
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70%, 600px);
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--stroke);
+  background: var(--surface);
+  backdrop-filter: blur(26px) saturate(1.4);
+  -webkit-backdrop-filter: blur(26px) saturate(1.4);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  animation: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+/* В вертикальном режиме шторка не выше области под видео: картинка всегда видна целиком. */
+.room--portrait .sheet {
+  max-height: max(260px, calc(var(--app-h, 100dvh) - 100vw * 9 / 16 - var(--safe-t) - 60px));
+}
+
+.sheet__grip {
+  width: 38px;
+  height: 5px;
+  margin: 8px auto 0;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 4px 18px;
+}
+
+.sheet__head h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sheet__body {
+  display: grid;
+  gap: 14px;
+  padding: 8px 16px calc(var(--safe-b) + 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sheet__section {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sheet__footer {
+  padding-top: 4px;
+}
+
+.room--landscape .sheet,
+.room--desktop .sheet {
+  left: auto;
+  top: auto;
+  right: calc(var(--safe-r) + 12px);
+  bottom: calc(var(--safe-b) + 12px);
+  width: min(380px, 92vw);
+  max-height: calc(var(--app-h, 100dvh) - var(--safe-t) - 24px);
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  animation: slide-in 0.22s ease-out;
+}
+
+.room--landscape .sheet__grip,
+.room--desktop .sheet__grip {
+  display: none;
+}
+
+.room--landscape .sheet__body,
+.room--desktop .sheet__body {
+  padding-bottom: 16px;
+}
+
+.sheet--small .sheet__body {
+  gap: 16px;
+}
+
+.quick-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 10px;
+}
+
+.quick {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 14px 6px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.quick__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--glass-strong);
+}
+
+.quick--on .quick__icon {
+  background: var(--accent);
+}
+
+.quick__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.quick__state {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.rows {
+  display: grid;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0 14px;
+}
+
+.rows .row:last-child {
+  border-bottom: 0;
+}
+
+.urlbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+}
+
+.urlbar input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.urlbar__go {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.confirm > span {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.confirm .btn {
+  flex: 1;
+}
+
+.people {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+}
+
+.person__info {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.person__name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.person__name em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.person__status {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.sheet--invite .sheet__body {
+  justify-items: center;
+}
+
+.qr {
+  padding: 10px;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.invite-link {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--glass);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.invite-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.quality-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.55);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* На узком телефоне шапке тесно: бейдж качества уступает место названию и счётчику. */
+@media (max-width: 430px) {
+  .quality-badge {
+    display: none;
+  }
+}
+
+.topbar__sub {
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Панели поверх видео пропускают клики и касания сквозь пустые места —
+   иначе полоса шапки съедает клики по верху сайта (например, по поиску YouTube).
+   ============================================================ */
+
+.room--landscape .topbar,
+.room--landscape .control-bar {
+  pointer-events: none;
+}
+
+.room--landscape .topbar > *,
+.room--landscape .control-bar > * {
+  pointer-events: auto;
+}
+
+.room--landscape.is-idle .topbar > *,
+.room--landscape.is-idle .control-bar > * {
+  pointer-events: none;
+}
+
+/* ============================================================
+   Компьютер: шапка и панель управления стоят в чёрных полосах над и под видео
+   (при 16:9 они всё равно пустые) и никогда не перекрывают сайт.
+   ============================================================ */
+
+.room--desktop .theater {
+  top: 60px;
+  bottom: 74px;
+}
+
+.room--desktop .topbar {
+  height: 60px;
+  padding: 0 16px;
+  background: none;
+  text-shadow: none;
+}
+
+.room--desktop .control-bar {
+  height: 74px;
+  padding: 0 16px;
+  background: none;
+}
+
+.room--desktop .side-rail {
+  display: none;
+}
+
+/* ============================================================
+   Общая страница: создать комнату или войти в открытую
+   ============================================================ */
+
+.profile-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.profile-row .avatar {
+  margin-bottom: 0;
+}
+
+.field--grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.disclosure {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--stroke);
+}
+
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure > summary svg {
+  transition: transform 0.2s;
+}
+
+.disclosure[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.disclosure__body {
+  display: grid;
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.live-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(91, 114, 255, 0.16), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(143, 162, 255, 0.18);
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(52, 210, 123, 0.12);
+  color: #b8f5d2;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.live-card__people {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.danger-zone {
+  padding-top: 4px;
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-button:hover {
+  color: var(--text);
+}
+
+.share-box {
+  display: grid;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--stroke);
+}
+
+.share-box__label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.share-box__url {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--glass);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.share-box__url span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Сообщения как в Telegram: ответы, реакции, правка
+   ============================================================ */
+
+.chat-list {
+  padding-top: 18px;
+}
+
+.msg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.msg-group--mine .msg {
+  align-items: flex-end;
+}
+
+.bubble {
+  white-space: normal;
+  transition: box-shadow 0.15s;
+}
+
+.bubble__text {
+  white-space: pre-wrap;
+}
+
+.bubble__edited {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.bubble__quote {
+  display: grid;
+  width: 100%;
+  min-width: 120px;
+  max-width: 100%;
+  margin: 1px 0 5px;
+  padding: 3px 8px;
+  border-left: 3px solid var(--accent-2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.bubble__quote strong {
+  color: var(--accent-2);
+  font-size: 12.5px;
+}
+
+.bubble__quote span {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-group--mine .bubble__quote {
+  border-left-color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.msg-group--mine .bubble__quote strong {
+  color: #fff;
+}
+
+.msg-group--mine .bubble__quote span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.msg__reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--stroke);
+  font-size: 14px;
+  transition: transform 0.12s;
+}
+
+.reaction-chip b {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reaction-chip.is-mine {
+  background: rgba(91, 114, 255, 0.28);
+  border-color: rgba(143, 162, 255, 0.6);
+}
+
+.reaction-chip:active {
+  transform: scale(0.92);
+}
+
+.msg--active .bubble {
+  box-shadow: 0 0 0 2px var(--accent-2);
+}
+
+.msg--flash .bubble {
+  animation: msg-flash 1.2s ease-out;
+}
+
+@keyframes msg-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 3px rgba(143, 162, 255, 0.85);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* кружки действий при наведении — только там, где есть мышь */
+.msg__tools {
+  position: absolute;
+  top: -14px;
+  right: -8px;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(22, 24, 32, 0.94);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.msg-group--mine .msg__tools {
+  right: auto;
+  left: -8px;
+}
+
+.msg__tools > button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.msg__tools > button:hover {
+  color: var(--text);
+  background: var(--glass-strong);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* Кружки стоят сбоку от пузыря и не закрывают текст — оставляем им место. */
+  .msg-group {
+    max-width: 76%;
+  }
+
+  .msg__tools {
+    top: 50%;
+    right: auto;
+    left: calc(100% + 6px);
+    transform: translateY(-50%);
+    /* Пока кружки прячутся, они остаются кликабельными: visibility выключается с задержкой.
+       Раньше pointer-events отключались мгновенно — и кружки «убегали» из-под курсора. */
+    pointer-events: auto;
+    visibility: hidden;
+    transition:
+      opacity 0.12s 0.25s,
+      visibility 0s 0.37s;
+  }
+
+  /* Невидимый мостик над щелью между пузырём и кружками: наведение не слетает по пути к ним. */
+  .msg::after {
+    content: "";
+    position: absolute;
+    top: -6px;
+    bottom: -6px;
+    left: 100%;
+    width: 18px;
+  }
+
+  .msg-group--mine .msg::after {
+    left: auto;
+    right: 100%;
+  }
+
+  .msg-group--mine .msg__tools {
+    left: auto;
+    right: calc(100% + 6px);
+  }
+
+  .msg__tools > button {
+    width: 24px;
+    height: 24px;
+  }
+
+  .msg:hover .msg__tools,
+  .msg__tools.is-open {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+}
+
+.msg__picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  display: flex;
+  gap: 1px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(28, 30, 40, 0.97);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.7);
+  animation: pop 0.14s ease-out;
+}
+
+.msg-group--mine .msg__picker {
+  right: auto;
+  left: 0;
+}
+
+.msg__picker button,
+.msg-menu__reactions button {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  transition: transform 0.12s;
+}
+
+.msg__picker button {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+.msg__picker button:hover,
+.msg-menu__reactions button:hover {
+  transform: scale(1.18);
+}
+
+.msg__picker .is-mine,
+.msg-menu__reactions .is-mine {
+  background: rgba(91, 114, 255, 0.35);
+}
+
+/* на телефоне долгое нажатие открывает наше меню, а не системное выделение текста */
+@media (pointer: coarse) {
+  .chat-list,
+  .bubble {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+.msg-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(5, 6, 10, 0.32);
+}
+
+.msg-menu {
+  position: fixed;
+  z-index: 201;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  animation: pop 0.16s ease-out;
+}
+
+.msg-menu__reactions {
+  display: flex;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(28, 30, 40, 0.97);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+
+.msg-menu__reactions button {
+  width: 38px;
+  height: 38px;
+  font-size: 22px;
+}
+
+.msg-menu__actions {
+  display: grid;
+  min-width: 210px;
+  justify-self: start;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(28, 30, 40, 0.97);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+
+.msg-menu__actions button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  text-align: left;
+}
+
+.msg-menu__actions button + button {
+  border-top: 1px solid var(--stroke);
+}
+
+.msg-menu__actions button:hover {
+  background: var(--glass);
+}
+
+.copied-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 96px);
+  z-index: 210;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(20, 22, 30, 0.92);
+  border: 1px solid var(--stroke);
+  font-size: 13px;
+  transform: translateX(-50%);
+  animation: pop 0.2s ease-out;
+}
+
+.composer-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-left: 3px solid var(--accent-2);
+  border-radius: 12px;
+  background: rgba(30, 32, 42, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--accent-2);
+  animation: pop 0.14s ease-out;
+}
+
+.composer-context__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.composer-context__text strong {
+  font-size: 12.5px;
+}
+
+.composer-context__text span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-context > button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.composer-context > button:hover {
+  color: var(--text);
+  background: var(--glass);
+}
+
+/* Узкий экран в режиме «только видео» (полный экран вертикально): панель компактная,
+   второстепенное убираем — громкость остаётся кнопкой, участники доступны справа. */
+@media (max-width: 600px) {
+  .room--landscape .control-bar {
+    gap: 8px;
+    padding-left: calc(var(--safe-l) + 12px);
+    padding-right: calc(var(--safe-r) + 12px);
+  }
+  .room--landscape .control-bar__group {
+    gap: 8px;
+  }
+  .room--landscape .control-bar .ibtn--md {
+    width: 42px;
+    height: 42px;
+  }
+  .room--landscape .volume {
+    padding-right: 0;
+  }
+  .room--landscape .volume .slider,
+  .room--landscape .control-bar__people {
+    display: none;
+  }
+}
