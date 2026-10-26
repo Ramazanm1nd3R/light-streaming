@@ -28,6 +28,7 @@ import {
   onFullscreenChange,
   streamVideo,
 } from "../lib/fullscreen.ts";
+import { prepareOverlayFullscreen, type OverlayFeed, type OverlayPlayer } from "../lib/overlayFullscreen.ts";
 import { load, save } from "../lib/storage.ts";
 import { ChatArea, ChatToasts } from "./Chat.tsx";
 import { InviteSheet, LeaveSheet, MoreSheet, PeopleSheet, type Settings } from "./Sheets.tsx";
@@ -229,6 +230,31 @@ export function Room(props: Props) {
     });
   };
 
+  // iPhone: заранее готовим видео с наложенным чатом и реакциями для нативного полного экрана.
+  // Safari разрешает открыть его только синхронно в момент нажатия — поэтому не в обработчике.
+  const overlayRef = useRef<OverlayPlayer | null>(null);
+  const feedRef = useRef<OverlayFeed>({ messages: [], reactions: [], selfUid: "" });
+  feedRef.current = { messages: session.messages, reactions: session.reactions, selfUid: session.selfUid };
+  useEffect(() => {
+    if (!hb || streamState !== "playing" || canFullscreenPage()) return;
+    let source: HTMLVideoElement | null = null;
+    const prepare = () => {
+      const video = streamVideo(hbRef.current);
+      if (!video?.videoWidth || video === source) return;
+      // кадры приходят чуть позже «playing», а после переподключения видео-элемент может смениться
+      overlayRef.current?.dispose();
+      source = video;
+      overlayRef.current = prepareOverlayFullscreen(video, () => feedRef.current);
+    };
+    prepare();
+    const timer = window.setInterval(prepare, 1500);
+    return () => {
+      clearInterval(timer);
+      overlayRef.current?.dispose();
+      overlayRef.current = null;
+    };
+  }, [hb, streamState]);
+
   const toggleFullscreen = async () => {
     try {
       if (isPageFullscreen()) return await exitPageFullscreen();
@@ -238,7 +264,10 @@ export function Room(props: Props) {
     } catch {
       // браузер отказал — пробуем видео-плеер ниже
     }
-    // iPhone: Safari даёт полный экран только видео — открываем кадр в нативном плеере iOS.
+    // iPhone: Safari даёт полный экран только видео — открываем в нативном плеере iOS наше
+    // видео с чатом и реакциями поверх кадра, а если оно не готово — исходное видео трансляции.
+    const overlay = overlayRef.current;
+    if (overlay?.ready() && overlay.enter(ui.show)) return;
     const video = streamVideo(hbRef.current);
     if (video && enterVideoFullscreen(video, ui.show)) return;
     toast(
