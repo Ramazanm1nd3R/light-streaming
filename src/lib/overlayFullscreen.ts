@@ -27,11 +27,19 @@ export function canOverlayFullscreen(): boolean {
   return typeof (document.createElement("canvas") as CaptureCanvas).captureStream === "function";
 }
 
+/** Что происходит в нативном плеере, пока он открыт. */
+export interface FullscreenEvents {
+  onExit(): void;
+  /** Пауза в плеере — это пауза у себя: картинка и звук сайта, а не только видео с чатом. */
+  onPause(): void;
+  onPlay(): void;
+}
+
 export interface OverlayPlayer {
   /** Видео из canvas загрузилось — можно открывать полный экран прямо в обработчике нажатия. */
   ready(): boolean;
   /** Открыть нативный полный экран. false — не вышло, нужно разворачивать исходное видео. */
-  enter(onExit: () => void): boolean;
+  enter(events: FullscreenEvents): boolean;
   dispose(): void;
 }
 
@@ -94,27 +102,50 @@ export function prepareOverlayFullscreen(source: HTMLVideoElement, feed: () => O
 
   return {
     ready: () => out.readyState >= 1 && out.videoWidth > 0,
-    enter(onExit) {
+    enter(events) {
       if (!out.webkitEnterFullscreen) return false;
       // Всё, что уже было в чате до входа в полный экран, не всплывает.
       const now = performance.now();
       for (const m of feed().messages) if (!seen.has(m.id)) seen.set(m.id, now - TOAST_MS);
       setFps(FPS);
-      out.addEventListener(
-        "webkitendfullscreen",
-        () => {
-          setFps(IDLE_FPS);
-          void source.play().catch(() => {});
-          void out.play().catch(() => {});
-          onExit();
-        },
-        { once: true },
-      );
+
+      let active = true;
+      let pauseTimer: number | undefined;
+      // iOS сама ставит на паузу беззвучное видео, которого не видно на странице, — а наше видео
+      // с чатом до нажатия спрятано. Поэтому при входе в полный экран явно запускаем его,
+      // иначе плеер открывается на паузе, а звук сайта при этом продолжает играть.
+      const play = () => void out.play().catch(() => {});
+      // Пауза, нажатая в плеере, — это пауза у себя. Ждём немного: при выходе из полного экрана
+      // iOS тоже ставит видео на паузу, и такую паузу пользовательской считать нельзя.
+      const onPause = () => {
+        clearTimeout(pauseTimer);
+        pauseTimer = window.setTimeout(() => active && out.paused && events.onPause(), 250);
+      };
+      const onPlay = () => {
+        clearTimeout(pauseTimer);
+        if (active) events.onPlay();
+      };
+      const onEnd = () => {
+        active = false;
+        clearTimeout(pauseTimer);
+        out.removeEventListener("pause", onPause);
+        out.removeEventListener("play", onPlay);
+        out.removeEventListener("webkitbeginfullscreen", play);
+        setFps(IDLE_FPS);
+        void source.play().catch(() => {});
+        play();
+        events.onExit();
+      };
+      out.addEventListener("pause", onPause);
+      out.addEventListener("play", onPlay);
+      out.addEventListener("webkitbeginfullscreen", play);
+      out.addEventListener("webkitendfullscreen", onEnd, { once: true });
       try {
         out.webkitEnterFullscreen();
+        play();
         return true;
       } catch {
-        setFps(IDLE_FPS);
+        onEnd();
         return false;
       }
     },

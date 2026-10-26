@@ -2659,3 +2659,136 @@ p {
 .tunnel-hint a {
   color: #fff;
 }
+
+/* ============================================================
+   Пауза только у себя: кадр замер под полупрозрачной плашкой
+   ============================================================ */
+
+.local-pause {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: rgba(7, 8, 12, 0.45);
+  backdrop-filter: grayscale(0.4);
+  -webkit-backdrop-filter: grayscale(0.4);
+  animation: pop 0.18s ease-out;
+}
+
+.local-pause__card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 320px;
+  padding: clamp(10px, 3vw, 18px) clamp(14px, 4vw, 22px);
+  border-radius: 18px;
+  background: rgba(16, 18, 24, 0.72);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  text-align: center;
+}
+
+.local-pause__card strong {
+  font-size: clamp(14px, 3.6vw, 17px);
+}
+
+.local-pause__card span {
+  color: var(--muted);
+  font-size: clamp(11.5px, 3vw, 13px);
+}
+
+.local-pause__card .btn {
+  height: 38px;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+/* ============================================================
+   Участники: полупрозрачное меню выпадает сверху из шапки
+   ============================================================ */
+
+.people-pop-dismiss {
+  position: absolute;
+  inset: 0;
+  z-index: 44;
+}
+
+.people-pop {
+  position: absolute;
+  top: calc(var(--safe-t) + 62px);
+  right: calc(var(--safe-r) + 12px);
+  z-index: 45;
+  display: grid;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(70vh, calc(var(--app-h, 100dvh) - var(--safe-t) - 80px));
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid var(--stroke);
+  background: rgba(16, 18, 24, 0.72);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  transform-origin: top right;
+  animation: drop-in 0.18s ease-out;
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+}
+
+.people-pop__head {
+  padding: 12px 16px 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.people-pop__list {
+  display: grid;
+  margin: 0;
+  padding: 0 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.people-pop__list .person {
+  padding: 8px 2px;
+}
+
+.people-pop__invite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 12px 12px;
+  height: 42px;
+  border-radius: 13px;
+  background: rgba(91, 114, 255, 0.22);
+  border: 1px solid rgba(143, 162, 255, 0.35);
+  color: #dfe4ff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.people-pop__invite:hover {
+  background: rgba(91, 114, 255, 0.32);
+}
+
+.room--landscape .people-pop,
+.room--desktop .people-pop {
+  top: calc(var(--safe-t) + 58px);
+}
+
+/* На компьютере с закреплённым чатом шапка заканчивается у колонки чата —
+   меню выпадает под кнопкой участников, а не поверх чата. */
+.room--desktop.chat-open .people-pop {
+  right: calc(360px + 12px);
+}

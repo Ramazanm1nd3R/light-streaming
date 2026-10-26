@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode, type RefObject } from "react";
-import { FastForward, Loader2, MousePointerClick, Play, RefreshCw, Rewind, X } from "lucide-react";
+import { FastForward, Loader2, MousePointerClick, Pause, Play, RefreshCw, Rewind, X } from "lucide-react";
 import type { FloatingReaction } from "../hooks/useRoomSession.ts";
 import type { StreamState } from "../hooks/useHyperbeam.ts";
 
@@ -18,6 +18,9 @@ interface Props {
   onKey(key: PlayerKey): void;
   onExitControl(): void;
   onRetry(): void;
+  /** Пауза только у этого зрителя: кадр замер, звук сайта выключен, остальные смотрят дальше. */
+  localPaused: boolean;
+  onResume(): void;
   children?: ReactNode;
 }
 
@@ -35,7 +38,7 @@ let rippleSeq = 0;
  * Пока не включён режим «Управление», случайные касания не попадают в облачный браузер.
  */
 export function Stage(props: Props) {
-  const { hbRef, demo, streamState, controlMode, showControlPill, overlayVisible, reactions, onTap, onKey, onExitControl, onRetry, children } = props;
+  const { hbRef, demo, streamState, controlMode, showControlPill, overlayVisible, reactions, onTap, onKey, onExitControl, onRetry, localPaused, onResume, children } = props;
   const lastTap = useRef(0);
   const tapTimer = useRef<number | undefined>(undefined);
   const [ripples, setRipples] = useState<Ripple[]>([]);
@@ -83,7 +86,7 @@ export function Stage(props: Props) {
           </div>
         ))}
 
-        {!controlMode && (
+        {!controlMode && !localPaused && (
           <div className={`player-keys${overlayVisible ? " is-visible" : ""}`}>
             <button type="button" aria-label="Назад" onClick={() => onKey("ArrowLeft")}>
               <Rewind size={22} />
@@ -103,6 +106,19 @@ export function Stage(props: Props) {
             Управление браузером
             <X size={14} />
           </button>
+        )}
+
+        {localPaused && (
+          <div className="local-pause">
+            <div className="local-pause__card">
+              <Pause size={22} />
+              <strong>Пауза только у тебя</strong>
+              <span>Остальные смотрят дальше, голосовой чат работает</span>
+              <button type="button" className="btn btn--primary" onClick={onResume}>
+                <Play size={16} /> Вернуться в эфир
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="reactions-layer" aria-hidden="true">

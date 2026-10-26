@@ -58,16 +58,39 @@ export function streamVideo(container: HTMLElement | null): IosVideo | null {
 }
 
 /**
- * Нативный полный экран iOS для видео. После выхода iOS может поставить видео на паузу —
- * для трансляции это бессмысленно, поэтому сразу продолжаем воспроизведение.
+ * Нативный полный экран iOS для исходного видео трансляции (запасной путь, если видео
+ * с наложенным чатом не готово). Пауза в плеере — это пауза у себя; паузу, которую iOS
+ * ставит сама при выходе, пользовательской не считаем и после выхода продолжаем показ.
  */
-export function enterVideoFullscreen(video: IosVideo, onExit: () => void): boolean {
+export function enterVideoFullscreen(
+  video: IosVideo,
+  events: { onExit(): void; onPause(): void; onPlay(): void },
+): boolean {
   if (!video.webkitEnterFullscreen) return false;
-  const resume = () => {
-    void video.play().catch(() => {});
-    onExit();
+  let active = true;
+  let pauseTimer: number | undefined;
+  const onPause = () => {
+    clearTimeout(pauseTimer);
+    pauseTimer = window.setTimeout(() => active && video.paused && events.onPause(), 250);
   };
-  video.addEventListener("webkitendfullscreen", resume, { once: true });
+  const onPlay = () => {
+    clearTimeout(pauseTimer);
+    if (active) events.onPlay();
+  };
+  video.addEventListener("pause", onPause);
+  video.addEventListener("play", onPlay);
+  video.addEventListener(
+    "webkitendfullscreen",
+    () => {
+      active = false;
+      clearTimeout(pauseTimer);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("play", onPlay);
+      void video.play().catch(() => {});
+      events.onExit();
+    },
+    { once: true },
+  );
   video.webkitEnterFullscreen();
   return true;
 }

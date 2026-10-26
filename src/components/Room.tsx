@@ -7,7 +7,9 @@ import {
   MicOff,
   Minimize,
   MousePointerClick,
+  Pause,
   PhoneOff,
+  Play,
   Plus,
   Smile,
   Users,
@@ -31,9 +33,10 @@ import {
 import { prepareOverlayFullscreen, type OverlayFeed, type OverlayPlayer } from "../lib/overlayFullscreen.ts";
 import { load, save } from "../lib/storage.ts";
 import { ChatArea, ChatToasts } from "./Chat.tsx";
-import { InviteSheet, LeaveSheet, MoreSheet, PeopleSheet, type Settings } from "./Sheets.tsx";
+import { InviteSheet, LeaveSheet, MoreSheet, type Settings } from "./Sheets.tsx";
 import { Stage, type PlayerKey } from "./Stage.tsx";
-import { Avatar, IconButton, Slider } from "./ui.tsx";
+import { Avatar, IconButton, Slider, plural } from "./ui.tsx";
+import { PeoplePopover } from "./People.tsx";
 
 interface Props {
   room: RoomInfo & { adminToken?: string };
@@ -50,14 +53,6 @@ interface Props {
 type SheetKind = "more" | "people" | "invite" | "leave" | null;
 
 const DEFAULT_SETTINGS: Settings = { volume: 0.9, voiceVolume: 1, duck: true, chatAlpha: 0.42 };
-
-export function plural(n: number, forms: [string, string, string]): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return forms[0];
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
-  return forms[2];
-}
 
 function normalizeUrl(input: string): string {
   if (/^[a-z]+:\/\//i.test(input)) return input;
@@ -76,6 +71,8 @@ export function Room(props: Props) {
   const [settings, setSettings] = useState<Settings>(() => ({ ...DEFAULT_SETTINGS, ...load("settings", {}) }));
   const [chatOpen, setChatOpen] = useState(() => window.innerWidth >= 1100 && !isTouch());
   const [sheet, setSheet] = useState<SheetKind>(null);
+  // Пауза только у себя: картинка замирает, звук сайта выключается, остальные смотрят дальше.
+  const [localPaused, setLocalPaused] = useState(false);
   const [picker, setPicker] = useState(false);
   // Режим «Управление» нужен только на сенсорных экранах — там он защищает от случайных касаний.
   // Мышью случайно не нажмёшь, поэтому на компьютере облачный браузер управляется всегда.
@@ -120,8 +117,16 @@ export function Room(props: Props) {
 
   useEffect(() => {
     if (!hb) return;
-    hb.volume = settings.duck && othersSpeaking ? settings.volume * 0.35 : settings.volume;
-  }, [hb, settings.volume, settings.duck, othersSpeaking]);
+    hb.volume = localPaused ? 0 : settings.duck && othersSpeaking ? settings.volume * 0.35 : settings.volume;
+  }, [hb, settings.volume, settings.duck, othersSpeaking, localPaused]);
+
+  // Поток Hyperbeam — прямой эфир: на паузе кадры просто не принимаются, а после неё
+  // показ сразу идёт с актуальной точки, без «догоняния».
+  useEffect(() => {
+    if (!hb) return;
+    hb.videoPaused = localPaused;
+    if (!localPaused) void streamVideo(hbRef.current)?.play().catch(() => {});
+  }, [hb, localPaused]);
 
   useEffect(() => session.setVoiceVolume(settings.voiceVolume), [settings.voiceVolume, session.setVoiceVolume]);
 
@@ -255,6 +260,9 @@ export function Room(props: Props) {
     };
   }, [hb, streamState]);
 
+  // Что пауза только у тебя, объясняет плашка на видео — отдельный тост не нужен.
+  const toggleLocalPause = () => setLocalPaused((paused) => !paused);
+
   const toggleFullscreen = async () => {
     try {
       if (isPageFullscreen()) return await exitPageFullscreen();
@@ -266,10 +274,11 @@ export function Room(props: Props) {
     }
     // iPhone: Safari даёт полный экран только видео — открываем в нативном плеере iOS наше
     // видео с чатом и реакциями поверх кадра, а если оно не готово — исходное видео трансляции.
+    const events = { onExit: ui.show, onPause: () => setLocalPaused(true), onPlay: () => setLocalPaused(false) };
     const overlay = overlayRef.current;
-    if (overlay?.ready() && overlay.enter(ui.show)) return;
+    if (overlay?.ready() && overlay.enter(events)) return;
     const video = streamVideo(hbRef.current);
-    if (video && enterVideoFullscreen(video, ui.show)) return;
+    if (video && enterVideoFullscreen(video, events)) return;
     toast(
       room.demo
         ? "В демо-режиме нет видео для полного экрана"
@@ -329,9 +338,14 @@ export function Room(props: Props) {
       onKey={pressKey}
       onExitControl={() => setControlMode(false)}
       onRetry={retryStream}
+      localPaused={localPaused}
+      onResume={() => setLocalPaused(false)}
     >
       {layout === "portrait" && (
         <div className={`stage-corner${ui.visible ? " is-visible" : ""}`}>
+          <IconButton label={localPaused ? "Продолжить" : "Пауза у себя"} size="sm" onClick={toggleLocalPause}>
+            {localPaused ? <Play size={16} /> : <Pause size={16} />}
+          </IconButton>
           <IconButton
             label={settings.volume === 0 ? "Включить звук" : "Выключить звук"}
             size="sm"
@@ -443,6 +457,9 @@ export function Room(props: Props) {
                   </div>
                 )}
               </div>
+              <IconButton label={localPaused ? "Продолжить" : "Пауза у себя"} tone={localPaused ? "active" : "glass"} onClick={toggleLocalPause}>
+                {localPaused ? <Play size={20} /> : <Pause size={20} />}
+              </IconButton>
               <div className="volume">
                 <IconButton
                   label={settings.volume === 0 ? "Включить звук" : "Выключить звук"}
@@ -509,7 +526,7 @@ export function Room(props: Props) {
         />
       )}
       {sheet === "people" && (
-        <PeopleSheet
+        <PeoplePopover
           participants={participants}
           selfId={selfId}
           isHost={isHost}
@@ -579,7 +596,7 @@ function TopBar(props: {
           {props.streamState === "demo" ? "демо" : props.rtt !== null ? `${props.rtt} мс` : "…"}
         </span>
         {/* Адрес у всех общий, поэтому позвать друга может любой участник. */}
-        <button type="button" className="avatar-stack" onClick={props.onInvite}>
+        <button type="button" className="avatar-stack" onClick={props.onPeople} aria-label="Участники">
           <AvatarRow participants={session.participants} speaking={session.speaking} max={3} size={30} />
           <span className="avatar-stack__plus" aria-label="Пригласить">
             <Plus size={16} />
