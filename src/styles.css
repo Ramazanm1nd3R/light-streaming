@@ -853,6 +853,18 @@ p {
   inset: 0;
 }
 
+/* замерший кадр на время паузы у себя — лежит ровно поверх видео трансляции */
+.stage__frozen {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  pointer-events: none;
+}
+
 .stage__gestures {
   position: absolute;
   inset: 0;

@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { FastForward, Loader2, MousePointerClick, Pause, Play, RefreshCw, Rewind, X } from "lucide-react";
 import type { FloatingReaction } from "../hooks/useRoomSession.ts";
 import type { StreamState } from "../hooks/useHyperbeam.ts";
@@ -18,8 +18,11 @@ interface Props {
   onKey(key: PlayerKey): void;
   onExitControl(): void;
   onRetry(): void;
+  /** Кнопка паузы ставит на паузу сайт у всех (ведущий) — или только у себя (гости). */
+  pauseForAll: boolean;
   /** Пауза только у этого зрителя: кадр замер, звук сайта выключен, остальные смотрят дальше. */
   localPaused: boolean;
+  onLocalPause(): void;
   onResume(): void;
   children?: ReactNode;
 }
@@ -36,9 +39,12 @@ let rippleSeq = 0;
  *  • одно касание — показать/спрятать управление;
  *  • двойное касание слева/справа — перемотка (как в YouTube), по центру — пауза.
  * Пока не включён режим «Управление», случайные касания не попадают в облачный браузер.
+ *
+ * Кнопка паузы одна. У ведущего она ставит на паузу сайт — у всех, рядом перемотка.
+ * У гостя — пауза только у себя; общая пауза у него в «Ещё» и в режиме «Управление».
  */
 export function Stage(props: Props) {
-  const { hbRef, demo, streamState, controlMode, showControlPill, overlayVisible, reactions, onTap, onKey, onExitControl, onRetry, localPaused, onResume, children } = props;
+  const { hbRef, demo, streamState, controlMode, showControlPill, overlayVisible, reactions, onTap, onKey, onExitControl, onRetry, pauseForAll, localPaused, onLocalPause, onResume, children } = props;
   const lastTap = useRef(0);
   const tapTimer = useRef<number | undefined>(undefined);
   const [ripples, setRipples] = useState<Ripple[]>([]);
@@ -64,7 +70,8 @@ export function Stage(props: Props) {
         onKey("ArrowRight");
         ripple("right");
       } else {
-        onKey(" ");
+        if (pauseForAll) onKey(" ");
+        else onLocalPause();
         ripple("center");
       }
       return;
@@ -88,15 +95,23 @@ export function Stage(props: Props) {
 
         {!controlMode && !localPaused && (
           <div className={`player-keys${overlayVisible ? " is-visible" : ""}`}>
-            <button type="button" aria-label="Назад" onClick={() => onKey("ArrowLeft")}>
-              <Rewind size={22} />
-            </button>
-            <button type="button" className="player-keys__main" aria-label="Пауза / воспроизведение" onClick={() => onKey(" ")}>
-              <Play size={26} className="player-keys__play" />
-            </button>
-            <button type="button" aria-label="Вперёд" onClick={() => onKey("ArrowRight")}>
-              <FastForward size={22} />
-            </button>
+            {pauseForAll ? (
+              <>
+                <button type="button" aria-label="Назад" onClick={() => onKey("ArrowLeft")}>
+                  <Rewind size={22} />
+                </button>
+                <button type="button" className="player-keys__main" aria-label="Пауза / воспроизведение" onClick={() => onKey(" ")}>
+                  <Play size={26} className="player-keys__play" />
+                </button>
+                <button type="button" aria-label="Вперёд" onClick={() => onKey("ArrowRight")}>
+                  <FastForward size={22} />
+                </button>
+              </>
+            ) : (
+              <button type="button" className="player-keys__main" aria-label="Пауза у себя" onClick={onLocalPause}>
+                <Pause size={26} />
+              </button>
+            )}
           </div>
         )}
 
@@ -108,6 +123,7 @@ export function Stage(props: Props) {
           </button>
         )}
 
+        {localPaused && <FrozenFrame hbRef={hbRef} />}
         {localPaused && (
           <div className="local-pause">
             <div className="local-pause__card">
@@ -166,4 +182,27 @@ function DemoScreen() {
       </div>
     </div>
   );
+}
+
+/**
+ * Замерший кадр на время паузы у себя. Само видео трансляции на паузу не ставим: SDK Hyperbeam
+ * сразу запускает его снова, а остановка потока в облаке (videoPaused) заново поднимает видео
+ * при продолжении. Поэтому поток принимается дальше, а поверх лежит снимок последнего кадра —
+ * после паузы показ мгновенно идёт с прямого эфира.
+ */
+function FrozenFrame({ hbRef }: { hbRef: RefObject<HTMLDivElement | null> }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const video = hbRef.current?.shadowRoot?.querySelector("video");
+    const el = canvas.current;
+    if (!video?.videoWidth || !el) return;
+    el.width = video.videoWidth;
+    el.height = video.videoHeight;
+    try {
+      el.getContext("2d")?.drawImage(video, 0, 0, el.width, el.height);
+    } catch {
+      // кадр не готов — останется затемнение плашки
+    }
+  }, [hbRef]);
+  return <canvas ref={canvas} className="stage__frozen" aria-hidden="true" />;
 }

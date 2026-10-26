@@ -115,11 +115,14 @@ export function prepareOverlayFullscreen(source: HTMLVideoElement, feed: () => O
       // с чатом до нажатия спрятано. Поэтому при входе в полный экран явно запускаем его,
       // иначе плеер открывается на паузе, а звук сайта при этом продолжает играть.
       const play = () => void out.play().catch(() => {});
-      // Пауза, нажатая в плеере, — это пауза у себя. Ждём немного: при выходе из полного экрана
-      // iOS тоже ставит видео на паузу, и такую паузу пользовательской считать нельзя.
+      // Пауза, нажатая в плеере, — это пауза у себя. Ждём немного и проверяем, что плеер всё ещё
+      // открыт и страница видна: при выходе из полного экрана, сворачивании или смене аудио
+      // (голосовой чат) iOS ставит видео на паузу сама, и такую паузу пользовательской не считаем.
       const onPause = () => {
         clearTimeout(pauseTimer);
-        pauseTimer = window.setTimeout(() => active && out.paused && events.onPause(), 250);
+        pauseTimer = window.setTimeout(() => {
+          if (active && out.paused && out.webkitDisplayingFullscreen !== false && document.visibilityState === "visible") events.onPause();
+        }, 250);
       };
       const onPlay = () => {
         clearTimeout(pauseTimer);

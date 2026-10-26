@@ -59,38 +59,17 @@ export function streamVideo(container: HTMLElement | null): IosVideo | null {
 
 /**
  * Нативный полный экран iOS для исходного видео трансляции (запасной путь, если видео
- * с наложенным чатом не готово). Пауза в плеере — это пауза у себя; паузу, которую iOS
- * ставит сама при выходе, пользовательской не считаем и после выхода продолжаем показ.
+ * с наложенным чатом не готово). Паузу здесь с паузой у себя не связываем: SDK Hyperbeam
+ * сам сразу запускает своё видео снова, и пауза с продолжением начинали бы бороться.
+ * После выхода iOS может поставить видео на паузу — сразу продолжаем показ.
  */
-export function enterVideoFullscreen(
-  video: IosVideo,
-  events: { onExit(): void; onPause(): void; onPlay(): void },
-): boolean {
+export function enterVideoFullscreen(video: IosVideo, onExit: () => void): boolean {
   if (!video.webkitEnterFullscreen) return false;
-  let active = true;
-  let pauseTimer: number | undefined;
-  const onPause = () => {
-    clearTimeout(pauseTimer);
-    pauseTimer = window.setTimeout(() => active && video.paused && events.onPause(), 250);
+  const resume = () => {
+    void video.play().catch(() => {});
+    onExit();
   };
-  const onPlay = () => {
-    clearTimeout(pauseTimer);
-    if (active) events.onPlay();
-  };
-  video.addEventListener("pause", onPause);
-  video.addEventListener("play", onPlay);
-  video.addEventListener(
-    "webkitendfullscreen",
-    () => {
-      active = false;
-      clearTimeout(pauseTimer);
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("play", onPlay);
-      void video.play().catch(() => {});
-      events.onExit();
-    },
-    { once: true },
-  );
+  video.addEventListener("webkitendfullscreen", resume, { once: true });
   video.webkitEnterFullscreen();
   return true;
 }

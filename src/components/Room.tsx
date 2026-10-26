@@ -9,7 +9,6 @@ import {
   MousePointerClick,
   Pause,
   PhoneOff,
-  Play,
   Plus,
   Smile,
   Users,
@@ -120,13 +119,23 @@ export function Room(props: Props) {
     hb.volume = localPaused ? 0 : settings.duck && othersSpeaking ? settings.volume * 0.35 : settings.volume;
   }, [hb, settings.volume, settings.duck, othersSpeaking, localPaused]);
 
-  // Поток Hyperbeam — прямой эфир: на паузе кадры просто не принимаются, а после неё
-  // показ сразу идёт с актуальной точки, без «догоняния».
-  useEffect(() => {
-    if (!hb) return;
-    hb.videoPaused = localPaused;
-    if (!localPaused) void streamVideo(hbRef.current)?.play().catch(() => {});
-  }, [hb, localPaused]);
+  // Пауза у себя не трогает соединение с облаком: поток принимается дальше, Stage показывает
+  // замерший кадр, а звук выключается через muted — на iPhone громкость из кода не меняется,
+  // поэтому hb.volume = 0 там не помогает. После паузы показ сразу идёт с прямого эфира.
+  const mutedByPause = useRef(false);
+  const applyPauseMute = useCallback((paused: boolean) => {
+    const video = streamVideo(hbRef.current);
+    if (!video) return;
+    if (paused) {
+      mutedByPause.current = true;
+      video.muted = true;
+    } else if (mutedByPause.current) {
+      mutedByPause.current = false;
+      video.muted = false;
+    }
+  }, []);
+  // Страховка на случай, если после переподключения SDK подменил видео-элемент.
+  useEffect(() => applyPauseMute(localPaused), [hb, localPaused, streamState, applyPauseMute]);
 
   useEffect(() => session.setVoiceVolume(settings.voiceVolume), [settings.voiceVolume, session.setVoiceVolume]);
 
@@ -260,8 +269,16 @@ export function Room(props: Props) {
     };
   }, [hb, streamState]);
 
-  // Что пауза только у тебя, объясняет плашка на видео — отдельный тост не нужен.
-  const toggleLocalPause = () => setLocalPaused((paused) => !paused);
+  // Звук переключаем прямо в обработчике нажатия: iPhone разрешает включать звук только
+  // в ответ на действие пользователя. Что пауза только у тебя, объясняет плашка на видео.
+  const pauseLocal = () => {
+    applyPauseMute(true);
+    setLocalPaused(true);
+  };
+  const resumeLocal = () => {
+    applyPauseMute(false);
+    setLocalPaused(false);
+  };
 
   const toggleFullscreen = async () => {
     try {
@@ -274,11 +291,11 @@ export function Room(props: Props) {
     }
     // iPhone: Safari даёт полный экран только видео — открываем в нативном плеере iOS наше
     // видео с чатом и реакциями поверх кадра, а если оно не готово — исходное видео трансляции.
-    const events = { onExit: ui.show, onPause: () => setLocalPaused(true), onPlay: () => setLocalPaused(false) };
+    const events = { onExit: ui.show, onPause: pauseLocal, onPlay: resumeLocal };
     const overlay = overlayRef.current;
     if (overlay?.ready() && overlay.enter(events)) return;
     const video = streamVideo(hbRef.current);
-    if (video && enterVideoFullscreen(video, events)) return;
+    if (video && enterVideoFullscreen(video, ui.show)) return;
     toast(
       room.demo
         ? "В демо-режиме нет видео для полного экрана"
@@ -338,14 +355,13 @@ export function Room(props: Props) {
       onKey={pressKey}
       onExitControl={() => setControlMode(false)}
       onRetry={retryStream}
+      pauseForAll={isHost}
       localPaused={localPaused}
-      onResume={() => setLocalPaused(false)}
+      onLocalPause={pauseLocal}
+      onResume={resumeLocal}
     >
       {layout === "portrait" && (
         <div className={`stage-corner${ui.visible ? " is-visible" : ""}`}>
-          <IconButton label={localPaused ? "Продолжить" : "Пауза у себя"} size="sm" onClick={toggleLocalPause}>
-            {localPaused ? <Play size={16} /> : <Pause size={16} />}
-          </IconButton>
           <IconButton
             label={settings.volume === 0 ? "Включить звук" : "Выключить звук"}
             size="sm"
@@ -457,9 +473,13 @@ export function Room(props: Props) {
                   </div>
                 )}
               </div>
-              <IconButton label={localPaused ? "Продолжить" : "Пауза у себя"} tone={localPaused ? "active" : "glass"} onClick={toggleLocalPause}>
-                {localPaused ? <Play size={20} /> : <Pause size={20} />}
-              </IconButton>
+              {/* У гостя с управлением на компьютере кнопок поверх видео нет — клики идут в сайт,
+                  поэтому паузу у себя он ставит здесь. У остальных она в центре видео. */}
+              {!isHost && controlActive && !touch && !localPaused && (
+                <IconButton label="Пауза у себя" onClick={pauseLocal}>
+                  <Pause size={20} />
+                </IconButton>
+              )}
               <div className="volume">
                 <IconButton
                   label={settings.volume === 0 ? "Включить звук" : "Выключить звук"}
