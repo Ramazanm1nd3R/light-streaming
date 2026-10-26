@@ -102,9 +102,12 @@ app.post("/api/room", async (req, res) => {
       return;
     }
     console.error("[api] не удалось создать комнату:", err);
-    const message = String(err).includes("401")
+    const text = String(err);
+    const message = text.includes("401")
       ? "Hyperbeam отклонил ключ API — проверь HYPERBEAM_API_KEY"
-      : "Не удалось запустить облачный браузер. Подробности в консоли сервера.";
+      : text.includes("err_too_many_vm_requests")
+        ? "Hyperbeam временно ограничил запуск облачных браузеров — попробуй через несколько минут"
+        : "Не удалось запустить облачный браузер. Подробности в консоли сервера.";
     res.status(502).json({ error: message });
   }
 });

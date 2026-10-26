@@ -26,7 +26,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T;
 }
 
+// Профиль, доступный любому ключу. Если ключ однажды отказал в большем, дальше просим сразу его:
+// лишний запрос замедляет создание комнаты и расходует лимит Hyperbeam на создание сессий.
+const BASIC_PROFILE: StreamProfile = { width: 1280, height: 720, fps: 30 };
+let keyRestricted = false;
+
 export async function createSession(options: RoomOptions): Promise<HyperbeamSession & { stream: StreamProfile }> {
+  if (keyRestricted) return { ...(await requestSession(options, BASIC_PROFILE)), stream: BASIC_PROFILE };
   const wanted: StreamProfile = { width: 1920, height: 1080, fps: options.fps };
   try {
     return { ...(await requestSession(options, wanted)), stream: wanted };
@@ -34,9 +40,9 @@ export async function createSession(options: RoomOptions): Promise<HyperbeamSess
     // Тестовые и базовые ключи Hyperbeam не дают 1080p и 60 fps (err_api_restricted).
     // Тогда откатываемся к профилю, доступному всем: 1280×720, 30 кадров.
     if (!String(err).includes("err_api_restricted")) throw err;
-    const fallback: StreamProfile = { width: 1280, height: 720, fps: 30 };
-    console.warn("[hyperbeam] ключ не позволяет 1080p/60fps — запускаю 720p/30fps");
-    return { ...(await requestSession(options, fallback)), stream: fallback };
+    keyRestricted = true;
+    console.warn("[hyperbeam] ключ не позволяет 1080p/60fps — дальше комнаты запускаются в 720p/30fps");
+    return { ...(await requestSession(options, BASIC_PROFILE)), stream: BASIC_PROFILE };
   }
 }
 
