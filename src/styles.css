@@ -55,6 +55,23 @@ body {
   overflow: hidden;
 }
 
+/* Это приложение, а не документ: долгое нажатие на телефоне не должно выделять страницу.
+   Раньше выделение было отключено только у комнаты, а меню сообщения рендерится прямо
+   в <body> — и iOS по долгому нажатию выделяла всё, что лежит там. */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 button {
   font: inherit;
   color: inherit;

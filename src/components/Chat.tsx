@@ -75,7 +75,11 @@ export function ChatArea(props: ChatAreaProps) {
       messages={messages}
       selfUid={selfUid}
       activeId={menu?.message.id ?? null}
-      onOpenMenu={(message, rect) => setMenu({ message, rect })}
+      onOpenMenu={(message, rect) => {
+        // если iOS успела начать своё выделение по долгому нажатию — сбрасываем его
+        window.getSelection()?.removeAllRanges();
+        setMenu({ message, rect });
+      }}
       onReact={props.onReactMessage}
       onReply={startReply}
       onEdit={startEdit}
