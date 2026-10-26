@@ -7,7 +7,6 @@ import {
   Copy,
   Globe,
   Keyboard,
-  Link,
   Lock,
   Mic,
   MicOff,
@@ -19,9 +18,8 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import type { Participant } from "../../shared/protocol.ts";
 import type { PlayerKey } from "./Stage.tsx";
-import { Avatar, HostCrown, Sheet, Slider, Switch } from "./ui.tsx";
+import { Sheet, Slider, Switch } from "./ui.tsx";
 
 // ---------------------------------------------------------------- Меню
 
@@ -181,51 +179,6 @@ export function MoreSheet(props: {
           {isHost ? "Выйти или завершить" : "Выйти"}
         </button>
       </div>
-    </Sheet>
-  );
-}
-
-// ---------------------------------------------------------------- Участники
-
-export function PeopleSheet(props: {
-  participants: Participant[];
-  selfId: string;
-  isHost: boolean;
-  speaking: Set<string>;
-  onClose(): void;
-  onSetControl(id: string, value: boolean): void;
-  onInvite(): void;
-}) {
-  const sorted = [...props.participants].sort((a, b) => Number(b.isHost) - Number(a.isHost) || a.joinedAt - b.joinedAt);
-  return (
-    <Sheet title={`Участники (${props.participants.length})`} onClose={props.onClose}>
-      <ul className="people">
-        {sorted.map((p) => {
-          const talking = props.speaking.has(p.id);
-          return (
-            <li key={p.id} className="person">
-              <Avatar person={p} size={40} speaking={talking} showMic />
-              <div className="person__info">
-                <span className="person__name">
-                  {p.name}
-                  {p.id === props.selfId && <em> (вы)</em>}
-                  {p.isHost && <HostCrown />}
-                </span>
-                <span className="person__status">
-                  {talking ? "Говорит" : p.micOn ? "Микрофон включён" : "Микрофон выключен"}
-                  {!p.isHost && (p.canControl ? " · может управлять" : " · только смотрит")}
-                </span>
-              </div>
-              {props.isHost && !p.isHost && (
-                <Switch label={`Управление для ${p.name}`} checked={p.canControl} onChange={(v) => props.onSetControl(p.id, v)} />
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <button type="button" className="btn btn--glass btn--wide" onClick={props.onInvite}>
-        <Link size={16} /> Пригласить
-      </button>
     </Sheet>
   );
 }
