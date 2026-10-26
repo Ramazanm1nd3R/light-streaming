@@ -348,16 +348,17 @@ function ShareBox({ status }: { status: StatusResponse }) {
       // буфер обмена недоступен (http в локальной сети) — адрес видно и так
     }
   };
+  const via = status.tunnelProvider === "tailscale" ? "Tailscale Funnel" : "Cloudflare";
   const text =
     status.tunnel === "ready"
       ? status.tunnelProtected
         ? "Работает из любой сети, вход по коду из письма"
-        : "Работает из любой сети, пока запущен ноутбук"
+        : status.tunnelProvider === "cloudflare"
+          ? "Работает из любой сети; адрес меняется при каждом запуске"
+          : "Работает из любой сети; адрес постоянный"
       : status.tunnel === "starting"
-        ? "Поднимаю публичный адрес через Cloudflare…"
-        : status.tunnel === "missing"
-          ? "Только эта Wi-Fi сеть — для доступа отовсюду: brew install cloudflared"
-          : "Только эта Wi-Fi сеть";
+        ? `Поднимаю публичный адрес через ${via}…`
+        : "Пока только эта Wi-Fi сеть";
   return (
     <div className="share-box">
       <span className="share-box__label">Ссылка для своих</span>
@@ -366,7 +367,26 @@ function ShareBox({ status }: { status: StatusResponse }) {
         {copied ? <Check size={15} /> : <Copy size={15} />}
       </button>
       <span className={`tunnel tunnel--${isPublic ? "ready" : status.tunnel}`}>{text}</span>
+      {status.tunnelHint && <Hint text={status.tunnelHint} />}
     </div>
+  );
+}
+
+/** Подсказка туннеля: ссылки в ней кликабельны (например, «разреши Funnel»). */
+function Hint({ text }: { text: string }) {
+  const parts = text.split(/(https:\/\/\S+)/);
+  return (
+    <p className="note note--accent tunnel-hint">
+      {parts.map((part, i) =>
+        part.startsWith("https://") ? (
+          <a key={i} href={part} target="_blank" rel="noreferrer">
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </p>
   );
 }
 

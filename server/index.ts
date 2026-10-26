@@ -65,6 +65,8 @@ app.get("/api/status", (req, res) => {
     publicUrl: tunnel.publicUrl,
     tunnel: tunnel.state,
     tunnelProtected: tunnel.protected,
+    tunnelProvider: tunnel.provider,
+    tunnelHint: tunnel.state === "ready" ? null : tunnel.hint,
   };
   res.json(body);
 });
@@ -109,7 +111,18 @@ app.post("/api/room", async (req, res) => {
 
 // Защита пароля от перебора: не больше 5 неверных попыток за 5 минут с одного адреса.
 const failures = new Map<string, number[]>();
-const clientIp = (req: Request) => req.get("cf-connecting-ip") ?? req.socket.remoteAddress ?? "?";
+/**
+ * Адрес клиента для ограничения попыток. Через туннель все запросы приходят с 127.0.0.1,
+ * поэтому берём адрес, который добавил прокси: Cloudflare — CF-Connecting-IP, Tailscale
+ * Funnel — последний элемент X-Forwarded-For (первые клиент может подделать).
+ */
+function clientIp(req: Request): string {
+  const socket = req.socket.remoteAddress ?? "?";
+  const loopback = socket === "127.0.0.1" || socket === "::1" || socket === "::ffff:127.0.0.1";
+  const cf = req.get("cf-connecting-ip");
+  const forwarded = req.get("x-forwarded-for")?.split(",").pop()?.trim();
+  return (loopback && (cf || forwarded)) || socket;
+}
 
 app.delete("/api/room", async (req, res) => {
   if (!getRoom()) {
@@ -153,20 +166,24 @@ async function printShare(): Promise<void> {
   if (url === lastPrinted) return;
   lastPrinted = url;
   const qr = await QRCode.toString(url, { type: "terminal", small: true });
-  const { state, protected: guarded } = tunnelStatus();
+  const { state, provider, protected: guarded } = tunnelStatus();
   const scope =
-    state === "ready"
-      ? guarded
+    state !== "ready"
+      ? "только в этой Wi-Fi сети"
+      : guarded
         ? "из любой сети, вход по коду из письма"
-        : "из любой сети"
-      : "только в этой Wi-Fi сети";
+        : provider === "cloudflare"
+          ? "из любой сети, адрес новый при каждом запуске"
+          : "из любой сети, адрес постоянный";
   console.log(`\n  🔗 Ссылка для своих (${scope}):\n  ${url}\n\n${qr}`);
   console.log(`  🔑 Пароль, чтобы закрыть повисшую комнату: ${config.roomPassword}\n`);
 }
 
 onTunnelChange((url) => {
   if (url) void printShare();
-  else console.warn("\n  ⚠️  Туннель переподключается — старая ссылка перестанет работать, новая появится здесь.");
+  else if (tunnelStatus().provider === "cloudflare") {
+    console.warn("\n  ⚠️  Туннель переподключается — старая ссылка перестанет работать, новая появится здесь.");
+  } else console.warn("\n  ⚠️  Туннель переподключается — ссылка останется прежней, подожди пару секунд.");
 });
 
 function openInBrowser(url: string): void {

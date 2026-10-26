@@ -2632,3 +2632,11 @@ p {
     display: none;
   }
 }
+
+.tunnel-hint {
+  overflow-wrap: anywhere;
+}
+
+.tunnel-hint a {
+  color: #fff;
+}

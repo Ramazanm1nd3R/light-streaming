@@ -147,13 +147,17 @@ export function Room(props: Props) {
   useEffect(() => save("settings", settings), [settings]);
 
   // Quick Tunnel мог переподключиться с новым адресом — старая ссылка у гостей больше не работает.
-  const prevShare = useRef(props.shareUrl);
+  // Сравниваем только публичные адреса: пока туннель переподключается, shareUrl ненадолго
+  // становится адресом в Wi-Fi — это не повод говорить, что ссылка сменилась.
+  const lastPublic = useRef(props.shareUrl.startsWith("https://") ? props.shareUrl : null);
   useEffect(() => {
-    const prev = prevShare.current;
-    prevShare.current = props.shareUrl;
-    if (!isHost || prev === props.shareUrl) return;
-    if (prev.startsWith("https://")) toast("Адрес туннеля сменился — отправь новую ссылку (кнопка +)", "warn");
-    else if (props.shareUrl.startsWith("https://")) toast("Публичная ссылка готова — можно звать из любой сети");
+    if (!isHost || !props.shareUrl.startsWith("https://") || props.shareUrl === lastPublic.current) return;
+    const changed = lastPublic.current !== null;
+    lastPublic.current = props.shareUrl;
+    toast(
+      changed ? "Адрес туннеля сменился — отправь новую ссылку (кнопка +)" : "Публичная ссылка готова — можно звать из любой сети",
+      changed ? "warn" : "info",
+    );
   }, [props.shareUrl, isHost, toast]);
 
   useEffect(() => {

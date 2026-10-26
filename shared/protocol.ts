@@ -49,6 +49,10 @@ export interface StatusResponse {
   tunnel: "starting" | "ready" | "off" | "error" | "missing";
   /** Туннель пускает только указанные email (одноразовый код от Cloudflare). */
   tunnelProtected: boolean;
+  /** cloudflare — адрес новый при каждом запуске; tailscale и custom — постоянный. */
+  tunnelProvider: "cloudflare" | "tailscale" | "custom" | "none";
+  /** Что сделать, чтобы публичная ссылка заработала (ссылка на включение Funnel и т.п.). */
+  tunnelHint: string | null;
 }
 
 export interface CreateRoomRequest extends RoomOptions {
