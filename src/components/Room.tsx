@@ -226,7 +226,10 @@ export function Room(props: Props) {
     async (action: "back" | "forward" | "reload" | "reconnect" | { url: string }) => {
       if (!hb) return toast("Облачный браузер недоступен в демо-режиме");
       // Если видео застряло на спиннере, а сеть в порядке — пересоздаём медиасоединение с Hyperbeam.
+      // Это касается только своего видео, поэтому доступно всем.
       if (action === "reconnect") return retryStream();
+      // Переходы меняют сайт у всех. Hyperbeam и сам не пустит без роли, но сообщение должно быть понятным.
+      if (!canControl) return toast("Ведущий пока не дал тебе управление");
       try {
         if (action === "back") await hb.tabs.goBack();
         else if (action === "forward") await hb.tabs.goForward();
@@ -236,7 +239,7 @@ export function Room(props: Props) {
         toast("Браузер не выполнил команду", "error");
       }
     },
-    [hb, toast, retryStream],
+    [hb, canControl, toast, retryStream],
   );
 
   const toggleControl = () => {

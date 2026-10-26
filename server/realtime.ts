@@ -20,6 +20,8 @@ interface Client {
 
 const clients = new Map<string, Client>();
 let history: ChatMessage[] = [];
+/** Решение ведущего о правах гостя — по постоянному uid, чтобы оно пережило переподключение. */
+let controlByUid = new Map<string, boolean>();
 
 function send(client: Client, message: ServerMessage): void {
   if (client.socket.readyState === client.socket.OPEN) client.socket.send(JSON.stringify(message));
@@ -73,7 +75,7 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
       color: COLOR_RE.test(msg.color) ? msg.color : "#7c8cff",
       isHost: client.isHost,
       micOn: Boolean(msg.micOn),
-      canControl: client.isHost || room.options.guestControl,
+      canControl: client.isHost || (controlByUid.get(uidFromKey(msg.key)) ?? room.options.guestControl),
       joinedAt: Date.now(),
       uid: uidFromKey(msg.key),
     };
@@ -161,17 +163,19 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
       return;
     }
     case "hb-user": {
-      self.hbUserId = String(msg.hbUserId).slice(0, 64);
-      // Роли по умолчанию в Hyperbeam одни на всех: если гостям управление выключено,
-      // его нет и у ведущего. Поэтому тем, кому оно положено (ведущему всегда, гостю —
-      // если ведущий его разрешил), выдаём роль явно — в том числе после переподключения.
-      const needsGrant = self.canControl && !room.options.guestControl;
-      if (needsGrant && room.adminToken) {
+      const hbUserId = String(msg.hbUserId).slice(0, 64);
+      // Чужой id не принимаем: иначе можно было бы выдать или отобрать права у другого человека.
+      if (participants().some((p) => p.id !== id && p.hbUserId === hbUserId)) return;
+      self.hbUserId = hbUserId;
+      // Роли по умолчанию в Hyperbeam одни на всех: управление есть у всех, если гостям его
+      // разрешили, и ни у кого — если нет. Тем, чьи права отличаются (ведущему всегда, гостю —
+      // по решению ведущего), выставляем роли явно, в том числе после переподключения.
+      if (self.canControl !== room.options.guestControl && room.adminToken) {
         try {
-          await setControl(room.embedUrl, room.adminToken, self.hbUserId, true);
+          await setControl(room.embedUrl, room.adminToken, self.hbUserId, self.canControl);
         } catch (err) {
-          console.error("[realtime] не удалось выдать управление:", err);
-          send(client, { t: "error", message: "Hyperbeam не выдал права на управление — попробуй переподключиться" });
+          console.error("[realtime] не удалось выставить права:", err);
+          send(client, { t: "error", message: "Hyperbeam не применил права на управление — попробуй переподключиться" });
         }
       }
       broadcast({ t: "updated", participant: self });
@@ -190,6 +194,7 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
         }
       }
       target.canControl = msg.canControl;
+      controlByUid.set(target.uid, msg.canControl);
       broadcast({ t: "updated", participant: target });
       return;
     }
@@ -259,5 +264,6 @@ export function attachRealtime(server: Server): void {
     for (const client of clients.values()) client.socket.close(4000, "room ended");
     clients.clear();
     history = [];
+    controlByUid = new Map();
   });
 }

@@ -45,6 +45,8 @@ const MUTANTS = [
   { file: "server/realtime.ts", desc: "uid — это сам секретный ключ", find: 'return createHash("sha256").update(secret).digest("base64url").slice(0, 16);', replace: "return secret;" },
   // права и сигнализация
   { file: "server/realtime.ts", desc: "гость может менять права", find: 'if (!client.isHost) return send(client, { t: "error", message: "Только ведущий может менять права" });', replace: "" },
+  { file: "server/realtime.ts", desc: "отобранное управление возвращается после переподключения", find: "controlByUid.set(target.uid, msg.canControl);", replace: "" },
+  { file: "server/realtime.ts", desc: "можно назваться чужим id Hyperbeam", find: "if (participants().some((p) => p.id !== id && p.hbUserId === hbUserId)) return;", replace: "" },
   { file: "server/realtime.ts", desc: "сигнализация уходит всем, а не адресату", find: 'if (target?.participant) send(target, { t: "signal", from: id, data: msg.data });', replace: 'broadcast({ t: "signal", from: id, data: msg.data }, id);' },
   { file: "server/realtime.ts", desc: "нет ограничения частоты летящих реакций", find: "if (now - client.lastReactionAt < 250) return;", replace: "" },
   { file: "server/realtime.ts", desc: "уход участника не запускает таймер пустой комнаты", find: "        if (client.participant) broadcast({ t: \"left\", id });\n        setOccupancy(participants().length);", replace: "        if (client.participant) broadcast({ t: \"left\", id });" },

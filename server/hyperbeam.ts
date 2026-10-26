@@ -52,9 +52,14 @@ export interface StreamProfile {
   fps: number;
 }
 
+/**
+ * Роли того, кто управляет облачным браузером: ввод мышью и клавиатурой (control) и API вкладок
+ * (chrome_apis) — переход по адресу, назад, вперёд, обновить. Выдаются и отбираются только вместе:
+ * без chrome_apis у зрителя не работают кнопки браузера, а с ним одним он мог бы листать сайт за всех.
+ */
+export const CONTROL_ROLES = ["control", "chrome_apis"];
+
 function requestSession(options: RoomOptions, profile: StreamProfile): Promise<HyperbeamSession> {
-  const defaultRoles = ["chrome_apis", "resize"];
-  if (options.guestControl) defaultRoles.push("control");
 
   return request<HyperbeamSession>("POST", "/vm", {
     start_url: options.startUrl || "about:blank",
@@ -71,7 +76,8 @@ function requestSession(options: RoomOptions, profile: StreamProfile): Promise<H
     locale: { language: "ru-RU,ru,en-US,en" },
     touch_gestures: { swipe: false, pinch: false },
     // Права раздаёт ведущий; у него admin_token, так что сам он всегда может вернуть себе управление.
-    default_roles: defaultRoles,
+    // Зрителю без управления не достаётся ни одной роли — только смотреть.
+    default_roles: options.guestControl ? CONTROL_ROLES : [],
     timeout: {
       offline: config.offlineTimeout,
       absolute: config.absoluteTimeout,
@@ -112,7 +118,7 @@ export async function setControl(
     method: "POST",
     headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" },
     // Параметры передаются массивом — так же, как аргументы hb.addRoles(userIds, roles).
-    body: JSON.stringify([[hbUserId], ["control"]]),
+    body: JSON.stringify([[hbUserId], CONTROL_ROLES]),
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`Hyperbeam roles → ${res.status} ${await res.text().catch(() => "")}`);

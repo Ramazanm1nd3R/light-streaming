@@ -130,46 +130,61 @@ export function MoreSheet(props: {
       {props.browserAvailable && (
         <>
           <h3 className="sheet__section">Облачный браузер</h3>
-          <form className="urlbar" onSubmit={go}>
-            <Globe size={16} />
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Открыть ссылку или найти…"
-              inputMode="url"
-              autoCapitalize="off"
-              autoCorrect="off"
-              enterKeyHint="go"
-            />
-            <button type="submit" className="urlbar__go" disabled={!url.trim()}>
-              Открыть
-            </button>
-          </form>
-          <div className="chips">
-            <button type="button" className="chip" onClick={() => props.onBrowser("back")}>
-              <ArrowLeft size={15} /> Назад
-            </button>
-            <button type="button" className="chip" onClick={() => props.onBrowser("forward")}>
-              <ArrowRight size={15} /> Вперёд
-            </button>
-            <button type="button" className="chip" onClick={() => props.onBrowser("reload")}>
-              <RotateCw size={15} /> Обновить
-            </button>
-            <button type="button" className="chip" onClick={() => props.onBrowser("reconnect")}>
-              <RefreshCw size={15} /> Переподключить видео
-            </button>
-          </div>
-          <div className="chips">
-            <span className="chips__hint">
-              <Keyboard size={14} /> Клавиши плеера:
-            </span>
-            <button type="button" className="chip" onClick={() => props.onKey("f")}>
-              F — во весь кадр
-            </button>
-            <button type="button" className="chip" onClick={() => props.onKey("m")}>
-              M — звук
-            </button>
-          </div>
+          {/* Переходы, назад/вперёд, обновление и клавиши плеера меняют сайт у всех — только с правами.
+              Переподключить видео можно всегда: это касается только своего видео. */}
+          {canControl ? (
+            <>
+              <form className="urlbar" onSubmit={go}>
+                <Globe size={16} />
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="Открыть ссылку или найти…"
+                  inputMode="url"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  enterKeyHint="go"
+                />
+                <button type="submit" className="urlbar__go" disabled={!url.trim()}>
+                  Открыть
+                </button>
+              </form>
+              <div className="chips">
+                <button type="button" className="chip" onClick={() => props.onBrowser("back")}>
+                  <ArrowLeft size={15} /> Назад
+                </button>
+                <button type="button" className="chip" onClick={() => props.onBrowser("forward")}>
+                  <ArrowRight size={15} /> Вперёд
+                </button>
+                <button type="button" className="chip" onClick={() => props.onBrowser("reload")}>
+                  <RotateCw size={15} /> Обновить
+                </button>
+                <button type="button" className="chip" onClick={() => props.onBrowser("reconnect")}>
+                  <RefreshCw size={15} /> Переподключить видео
+                </button>
+              </div>
+              <div className="chips">
+                <span className="chips__hint">
+                  <Keyboard size={14} /> Клавиши плеера:
+                </span>
+                <button type="button" className="chip" onClick={() => props.onKey("f")}>
+                  F — во весь кадр
+                </button>
+                <button type="button" className="chip" onClick={() => props.onKey("m")}>
+                  M — звук
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="note">Открывать сайты, листать и управлять плеером может тот, кому ведущий дал управление.</p>
+              <div className="chips">
+                <button type="button" className="chip" onClick={() => props.onBrowser("reconnect")}>
+                  <RefreshCw size={15} /> Переподключить видео
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
 

@@ -352,6 +352,49 @@ describe("права и сигнализация", () => {
     assert.equal(upd.participant.canControl, true);
   });
 
+  it("отобранное управление не возвращается после переподключения", async () => {
+    const { body: room } = await createRoom(server, { guestControl: true });
+    const host = await join({ name: "Lukas", owner: room.ownerToken });
+    const key = "ключ-браузера-гостя-без-прав";
+    const guest = await join({ name: "Mia", key });
+    host.send({ t: "set-control", participantId: guest.selfId, canControl: false });
+    await host.next((m) => m.t === "updated" && m.participant.id === guest.selfId);
+    guest.close();
+    await host.next((m) => m.t === "left");
+
+    const again = await join({ name: "Mia", key });
+    const welcome = again.messages.find((m) => m.t === "welcome") as Extract<ServerMessage, { t: "welcome" }>;
+    assert.equal(welcome.participants.find((p) => p.id === again.selfId)?.canControl, false);
+    // а другой гость по-прежнему получает права по настройке комнаты
+    const other = await join({ name: "Jonas" });
+    const welcome2 = other.messages.find((m) => m.t === "welcome") as Extract<ServerMessage, { t: "welcome" }>;
+    assert.equal(welcome2.participants.find((p) => p.id === other.selfId)?.canControl, true);
+  });
+
+  it("выданное управление тоже переживает переподключение", async () => {
+    const { body: room } = await createRoom(server, { guestControl: false });
+    const host = await join({ name: "Lukas", owner: room.ownerToken });
+    const key = "ключ-браузера-гостя-с-правами";
+    const guest = await join({ name: "Mia", key });
+    host.send({ t: "set-control", participantId: guest.selfId, canControl: true });
+    await host.next((m) => m.t === "updated" && m.participant.id === guest.selfId);
+    guest.close();
+    await host.next((m) => m.t === "left");
+    const again = await join({ name: "Mia", key });
+    const welcome = again.messages.find((m) => m.t === "welcome") as Extract<ServerMessage, { t: "welcome" }>;
+    assert.equal(welcome.participants.find((p) => p.id === again.selfId)?.canControl, true);
+  });
+
+  it("чужой id пользователя Hyperbeam не принимается", async () => {
+    await createRoom(server);
+    const a = await join({ name: "A" });
+    const b = await join({ name: "B" });
+    a.send({ t: "hb-user", hbUserId: "hb-user-a" });
+    await b.next((m) => m.t === "updated" && m.participant.id === a.selfId);
+    b.send({ t: "hb-user", hbUserId: "hb-user-a" });
+    await a.none((m) => m.t === "updated" && m.participant.id === b.selfId);
+  });
+
   it("сигнализация WebRTC уходит только адресату", async () => {
     await createRoom(server);
     const a = await join({ name: "A" });
