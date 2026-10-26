@@ -262,8 +262,9 @@ function ChatList({
                           <button
                             type="button"
                             className="bubble__quote"
+                            // Касание не глушим: долгое нажатие на цитату открывает меню, как и на
+                            // остальном пузыре, а короткий тап прокручивает к оригиналу.
                             onClick={() => jumpTo(m.replyTo!.id)}
-                            onPointerDown={(e) => e.stopPropagation()}
                           >
                             <strong>{m.replyTo.name}</strong>
                             <span>{m.replyTo.text}</span>
