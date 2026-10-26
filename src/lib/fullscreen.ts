@@ -20,6 +20,8 @@ export type IosVideo = HTMLVideoElement & {
   webkitEnterFullscreen?: () => void;
   webkitSupportsFullscreen?: boolean;
   webkitDisplayingFullscreen?: boolean;
+  webkitPresentationMode?: string;
+  webkitSetPresentationMode?: (mode: string) => void;
 };
 
 const doc = document as WebkitDocument;

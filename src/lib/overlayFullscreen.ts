@@ -1,10 +1,11 @@
-// Полный экран на iPhone с чатом и реакциями поверх видео.
+// Полный экран на iPhone и «картинка в картинке» с чатом и реакциями поверх видео.
 //
 // Safari на iPhone разворачивает на весь экран только <video> — в нативном плеере, поверх
 // которого страница ничего нарисовать не может. Поэтому в плеер уходит не исходное видео
 // Hyperbeam, а наше: каждый кадр трансляции рисуется на canvas, поверх — всплывающие
 // сообщения и летящие реакции, а canvas.captureStream() превращает это в видеопоток.
-// Сообщения становятся частью картинки и видны и на весь экран, и в «картинке в картинке».
+// Сообщения становятся частью картинки и видны и на весь экран, и в «картинке в картинке» —
+// её так же получают браузеры без Document Picture-in-Picture (Safari, телефоны).
 // Звук и голос не затрагиваются: они по-прежнему играют отдельно.
 
 import type { ChatMessage } from "../../shared/protocol.ts";
@@ -27,7 +28,7 @@ export function canOverlayFullscreen(): boolean {
   return typeof (document.createElement("canvas") as CaptureCanvas).captureStream === "function";
 }
 
-/** Что происходит в нативном плеере, пока он открыт. */
+/** Что происходит в системном плеере (полный экран iOS или «картинка в картинке»), пока он открыт. */
 export interface FullscreenEvents {
   onExit(): void;
   /** Пауза в плеере — это пауза у себя: картинка и звук сайта, а не только видео с чатом. */
@@ -40,6 +41,8 @@ export interface OverlayPlayer {
   ready(): boolean;
   /** Открыть нативный полный экран. false — не вышло, нужно разворачивать исходное видео. */
   enter(events: FullscreenEvents): boolean;
+  /** Открыть «картинку в картинке». Вызывать в обработчике нажатия или действия Media Session. */
+  pip(events: FullscreenEvents): Promise<boolean>;
   dispose(): void;
 }
 
@@ -100,47 +103,60 @@ export function prepareOverlayFullscreen(source: HTMLVideoElement, feed: () => O
     timer = window.setInterval(draw, 1000 / fps);
   };
 
+  // iOS сама ставит на паузу беззвучное видео, которого не видно на странице, — а наше видео
+  // с чатом до нажатия спрятано. Поэтому, открывая плеер, явно запускаем его, иначе он
+  // открывается на паузе, а звук сайта при этом продолжает играть.
+  const play = () => void out.play().catch(() => {});
+
+  /**
+   * Видео ушло в системный плеер. Пауза, нажатая в нём, — это пауза у себя. Ждём немного
+   * и проверяем isOpen(): закрывая плеер, система тоже ставит видео на паузу, и такую паузу
+   * пользовательской не считаем. Возвращает функцию, которую зовут, когда плеер закрылся.
+   */
+  const present = (events: FullscreenEvents, isOpen: () => boolean) => {
+    // Всё, что уже было в чате до открытия плеера, не всплывает.
+    const now = performance.now();
+    for (const m of feed().messages) if (!seen.has(m.id)) seen.set(m.id, now - TOAST_MS);
+    setFps(FPS);
+
+    let active = true;
+    let pauseTimer: number | undefined;
+    const onPause = () => {
+      clearTimeout(pauseTimer);
+      pauseTimer = window.setTimeout(() => {
+        if (active && out.paused && isOpen()) events.onPause();
+      }, 250);
+    };
+    const onPlay = () => {
+      clearTimeout(pauseTimer);
+      if (active) events.onPlay();
+    };
+    out.addEventListener("pause", onPause);
+    out.addEventListener("play", onPlay);
+
+    return () => {
+      if (!active) return;
+      active = false;
+      clearTimeout(pauseTimer);
+      out.removeEventListener("pause", onPause);
+      out.removeEventListener("play", onPlay);
+      setFps(IDLE_FPS);
+      void source.play().catch(() => {});
+      play();
+      events.onExit();
+    };
+  };
+
   return {
     ready: () => out.readyState >= 1 && out.videoWidth > 0,
     enter(events) {
       if (!out.webkitEnterFullscreen) return false;
-      // Всё, что уже было в чате до входа в полный экран, не всплывает.
-      const now = performance.now();
-      for (const m of feed().messages) if (!seen.has(m.id)) seen.set(m.id, now - TOAST_MS);
-      setFps(FPS);
-
-      let active = true;
-      let pauseTimer: number | undefined;
-      // iOS сама ставит на паузу беззвучное видео, которого не видно на странице, — а наше видео
-      // с чатом до нажатия спрятано. Поэтому при входе в полный экран явно запускаем его,
-      // иначе плеер открывается на паузе, а звук сайта при этом продолжает играть.
-      const play = () => void out.play().catch(() => {});
-      // Пауза, нажатая в плеере, — это пауза у себя. Ждём немного и проверяем, что плеер всё ещё
-      // открыт и страница видна: при выходе из полного экрана, сворачивании или смене аудио
-      // (голосовой чат) iOS ставит видео на паузу сама, и такую паузу пользовательской не считаем.
-      const onPause = () => {
-        clearTimeout(pauseTimer);
-        pauseTimer = window.setTimeout(() => {
-          if (active && out.paused && out.webkitDisplayingFullscreen !== false && document.visibilityState === "visible") events.onPause();
-        }, 250);
-      };
-      const onPlay = () => {
-        clearTimeout(pauseTimer);
-        if (active) events.onPlay();
-      };
+      // Пауза при сворачивании Safari или смене аудио (голосовой чат) — тоже не пользовательская.
+      const end = present(events, () => out.webkitDisplayingFullscreen !== false && document.visibilityState === "visible");
       const onEnd = () => {
-        active = false;
-        clearTimeout(pauseTimer);
-        out.removeEventListener("pause", onPause);
-        out.removeEventListener("play", onPlay);
         out.removeEventListener("webkitbeginfullscreen", play);
-        setFps(IDLE_FPS);
-        void source.play().catch(() => {});
-        play();
-        events.onExit();
+        end();
       };
-      out.addEventListener("pause", onPause);
-      out.addEventListener("play", onPlay);
       out.addEventListener("webkitbeginfullscreen", play);
       out.addEventListener("webkitendfullscreen", onEnd, { once: true });
       try {
@@ -149,6 +165,32 @@ export function prepareOverlayFullscreen(source: HTMLVideoElement, feed: () => O
         return true;
       } catch {
         onEnd();
+        return false;
+      }
+    },
+    async pip(events) {
+      // Вкладка в это время обычно скрыта — поэтому проверяем только, что окно ещё открыто.
+      const end = present(events, () => document.pictureInPictureElement === out || out.webkitPresentationMode === "picture-in-picture");
+      const onMode = () => out.webkitPresentationMode !== "picture-in-picture" && onLeave();
+      const onLeave = () => {
+        out.removeEventListener("leavepictureinpicture", onLeave);
+        out.removeEventListener("webkitpresentationmodechanged", onMode);
+        end();
+      };
+      out.addEventListener("leavepictureinpicture", onLeave);
+      try {
+        play();
+        if (document.pictureInPictureEnabled && out.requestPictureInPicture) {
+          await out.requestPictureInPicture();
+        } else if (out.webkitSetPresentationMode) {
+          out.addEventListener("webkitpresentationmodechanged", onMode);
+          out.webkitSetPresentationMode("picture-in-picture");
+        } else {
+          throw new Error("нет «картинки в картинке»");
+        }
+        return true;
+      } catch {
+        onLeave();
         return false;
       }
     },

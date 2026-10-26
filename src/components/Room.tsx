@@ -9,6 +9,7 @@ import {
   MousePointerClick,
   Pause,
   PhoneOff,
+  PictureInPicture2,
   Plus,
   Smile,
   Users,
@@ -30,8 +31,10 @@ import {
   streamVideo,
 } from "../lib/fullscreen.ts";
 import { prepareOverlayFullscreen, type OverlayFeed, type OverlayPlayer } from "../lib/overlayFullscreen.ts";
+import { canDocumentPip, canVideoPip, copyStyles, documentPip } from "../lib/pip.ts";
 import { load, save } from "../lib/storage.ts";
 import { ChatArea, ChatToasts } from "./Chat.tsx";
+import { MiniPlayer } from "./MiniPlayer.tsx";
 import { InviteSheet, LeaveSheet, MoreSheet, type Settings } from "./Sheets.tsx";
 import { Stage, type PlayerKey } from "./Stage.tsx";
 import { Avatar, IconButton, Slider, plural } from "./ui.tsx";
@@ -244,13 +247,15 @@ export function Room(props: Props) {
     });
   };
 
-  // iPhone: заранее готовим видео с наложенным чатом и реакциями для нативного полного экрана.
-  // Safari разрешает открыть его только синхронно в момент нажатия — поэтому не в обработчике.
+  // Видео с наложенным чатом и реакциями нужно iPhone для полного экрана и браузерам без
+  // Document Picture-in-Picture (Safari, телефоны) для мини-плеера. Готовим его заранее:
+  // Safari разрешает открыть плеер только синхронно в момент нажатия — поэтому не в обработчике.
+  const [needsOverlay] = useState(() => !canFullscreenPage() || (!canDocumentPip() && canVideoPip()));
   const overlayRef = useRef<OverlayPlayer | null>(null);
   const feedRef = useRef<OverlayFeed>({ messages: [], reactions: [], selfUid: "" });
   feedRef.current = { messages: session.messages, reactions: session.reactions, selfUid: session.selfUid };
   useEffect(() => {
-    if (!hb || streamState !== "playing" || canFullscreenPage()) return;
+    if (!hb || streamState !== "playing" || !needsOverlay) return;
     let source: HTMLVideoElement | null = null;
     const prepare = () => {
       const video = streamVideo(hbRef.current);
@@ -267,7 +272,7 @@ export function Room(props: Props) {
       overlayRef.current?.dispose();
       overlayRef.current = null;
     };
-  }, [hb, streamState]);
+  }, [hb, streamState, needsOverlay]);
 
   // Звук переключаем прямо в обработчике нажатия: iPhone разрешает включать звук только
   // в ответ на действие пользователя. Что пауза только у тебя, объясняет плашка на видео.
@@ -308,6 +313,66 @@ export function Room(props: Props) {
     setSheet(null);
     props.onLeave();
   };
+
+  // ---- мини-плеер «картинка в картинке»
+
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const miniPlayerAvailable = canDocumentPip() || (canVideoPip() && !room.demo);
+  const getStreamVideo = useCallback(() => streamVideo(hbRef.current), []);
+
+  const openMiniPlayer = async () => {
+    // Chrome и Edge: своё окно поверх всех окон — видео, мини-чат, реакции, микрофон, выход.
+    if (documentPip) {
+      if (documentPip.window) return;
+      try {
+        const win = await documentPip.requestWindow({ width: 400, height: 540 });
+        copyStyles(win.document);
+        win.document.title = "Light Streaming";
+        win.addEventListener("pagehide", () => setPipWindow(null), { once: true });
+        setPipWindow(win);
+      } catch {
+        toast("Браузер не открыл мини-плеер", "warn");
+      }
+      return;
+    }
+    // Остальные: системная «картинка в картинке» с сообщениями и реакциями, нарисованными на видео.
+    const overlay = overlayRef.current;
+    if (room.demo) return toast("В демо-режиме нет видео для мини-плеера", "warn");
+    if (!overlay?.ready()) return toast("Мини-плеер ещё готовится — попробуй через пару секунд", "warn");
+    if (!(await overlay.pip({ onExit: () => {}, onPause: pauseLocal, onPlay: resumeLocal }))) {
+      toast("Браузер не открыл «картинку в картинке»", "warn");
+    }
+  };
+
+  // Окно мини-плеера закрывается вместе с комнатой.
+  useEffect(() => () => pipWindow?.close(), [pipWindow]);
+
+  // Media Session: Chrome сам открывает мини-плеер, когда уходишь на другую вкладку, и показывает
+  // в окне «картинка в картинке» кнопки микрофона и выхода. Обработчики берут свежие функции из ref.
+  const actions = useRef({ openMiniPlayer, toggleMic: session.toggleMic, leave });
+  actions.current = { openMiniPlayer, toggleMic: session.toggleMic, leave };
+  useEffect(() => {
+    const media = navigator.mediaSession;
+    if (!media) return;
+    const handlers: [string, () => void][] = [
+      ["enterpictureinpicture", () => void actions.current.openMiniPlayer()],
+      ["togglemicrophone", () => actions.current.toggleMic()],
+      ["hangup", () => actions.current.leave()],
+    ];
+    const set = (action: string, handler: (() => void) | null) => {
+      try {
+        media.setActionHandler(action as MediaSessionAction, handler);
+      } catch {
+        // браузер не знает такого действия — просто без него
+      }
+    };
+    handlers.forEach(([action, handler]) => set(action, handler));
+    return () => handlers.forEach(([action]) => set(action, null));
+  }, []);
+  useEffect(() => {
+    const media = navigator.mediaSession as MediaSession & { setMicrophoneActive?(active: boolean): Promise<void> };
+    void media?.setMicrophoneActive?.(session.micOn)?.catch(() => {});
+  }, [session.micOn]);
 
   /** Ведущий закрывает без пароля, остальные — общим паролем. Ошибку покажет шторка. */
   const closeForAll = async (password?: string) => {
@@ -372,6 +437,11 @@ export function Room(props: Props) {
           {touch && (
             <IconButton label="Управление браузером" size="sm" tone={controlActive ? "active" : "glass"} onClick={toggleControl}>
               <MousePointerClick size={16} />
+            </IconButton>
+          )}
+          {miniPlayerAvailable && (
+            <IconButton label="Мини-плеер" size="sm" onClick={() => void openMiniPlayer()}>
+              <PictureInPicture2 size={16} />
             </IconButton>
           )}
           <IconButton label="На весь экран" size="sm" onClick={toggleFullscreen}>
@@ -512,6 +582,11 @@ export function Room(props: Props) {
                   <MessageCircle size={20} />
                 </IconButton>
               )}
+              {miniPlayerAvailable && (
+                <IconButton label="Мини-плеер" tone={pipWindow ? "active" : "glass"} onClick={() => void openMiniPlayer()}>
+                  <PictureInPicture2 size={20} />
+                </IconButton>
+              )}
               <IconButton label={fullscreen ? "Свернуть" : "На весь экран"} onClick={toggleFullscreen}>
                 {fullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
               </IconButton>
@@ -560,6 +635,18 @@ export function Room(props: Props) {
         <InviteSheet url={props.shareUrl} tunnel={props.tunnel} guarded={props.tunnelProtected} onClose={closeSheet} onCopied={() => toast("Ссылка скопирована")} />
       )}
       {sheet === "leave" && <LeaveSheet isHost={isHost} onClose={closeSheet} onLeave={leave} onCloseForAll={closeForAll} />}
+
+      {pipWindow && (
+        <MiniPlayer
+          win={pipWindow}
+          source={getStreamVideo}
+          demo={room.demo}
+          session={session}
+          localPaused={localPaused}
+          onResume={resumeLocal}
+          onLeave={leave}
+        />
+      )}
 
       <div className="toasts" aria-live="polite">
         {session.toasts.map((t) => (
