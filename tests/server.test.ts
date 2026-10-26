@@ -289,8 +289,19 @@ describe("реакции на сообщения", () => {
     a.send({ t: "chat", text: "x" });
     const msg = await chatOf(a, "x");
     a.send({ t: "react", id: msg.id, emoji: "<script>" });
-    a.send({ t: "react", id: msg.id, emoji: "🍕" });
+    a.send({ t: "react", id: msg.id, emoji: "🍕🍕" });
+    a.send({ t: "react", id: msg.id, emoji: "x" });
     await a.none((m) => m.t === "chat-update");
+  });
+
+  it("принимается любая реакция из полного списка, а не только из быстрого набора", async () => {
+    await createRoom(server);
+    const a = await join();
+    a.send({ t: "chat", text: "y" });
+    const msg = await chatOf(a, "y");
+    a.send({ t: "react", id: msg.id, emoji: "🥳" });
+    const update = await a.next<ChatEvent>((m) => m.t === "chat-update");
+    assert.deepEqual(Object.keys(update.message.reactions), ["🥳"]);
   });
 });
 

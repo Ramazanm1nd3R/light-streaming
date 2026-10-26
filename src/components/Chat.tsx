@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Copy, MessageCircleOff, Pencil, Reply, SendHorizontal, Smile, SmilePlus, X } from "lucide-react";
-import { MESSAGE_REACTIONS, REACTIONS, type ChatMessage } from "../../shared/protocol.ts";
+import { ChevronDown, ChevronUp, Copy, MessageCircleOff, Pencil, Reply, SendHorizontal, Smile, SmilePlus, X } from "lucide-react";
+import { REACTION_GROUPS, REACTIONS, type ChatMessage } from "../../shared/protocol.ts";
+import { quickReactions, rememberReaction } from "../lib/reactionUsage.ts";
 import { Avatar } from "./ui.tsx";
 
 const time = (at: number) => new Date(at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
@@ -43,7 +44,7 @@ export function ChatArea(props: ChatAreaProps) {
   const { messages, selfUid } = props;
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
-  const [menu, setMenu] = useState<{ message: ChatMessage; rect: DOMRect } | null>(null);
+  const [menu, setMenu] = useState<{ message: ChatMessage; rect: DOMRect; expanded: boolean; fromPicker: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Сообщение могли отредактировать или отреагировать на него, пока открыто меню / ответ.
@@ -70,17 +71,24 @@ export function ChatArea(props: ChatAreaProps) {
 
   const lastOwn = [...messages].reverse().find((m) => m.authorUid === selfUid) ?? null;
 
+  // Поставленная реакция попадает в «частые» и в следующий раз встанет в быстрый ряд впереди.
+  const reactMessage = (id: string, emoji: string) => {
+    const message = messages.find((m) => m.id === id);
+    if (message && myReaction(message, selfUid) !== emoji) rememberReaction(emoji);
+    props.onReactMessage(id, emoji);
+  };
+
   const list = (
     <ChatList
       messages={messages}
       selfUid={selfUid}
       activeId={menu?.message.id ?? null}
-      onOpenMenu={(message, rect) => {
+      onOpenMenu={(message, rect, expanded = false) => {
         // если iOS успела начать своё выделение по долгому нажатию — сбрасываем его
         window.getSelection()?.removeAllRanges();
-        setMenu({ message, rect });
+        setMenu({ message, rect, expanded, fromPicker: expanded });
       }}
-      onReact={props.onReactMessage}
+      onReact={reactMessage}
       onReply={startReply}
       onEdit={startEdit}
     />
@@ -118,9 +126,12 @@ export function ChatArea(props: ChatAreaProps) {
           rect={menu.rect}
           mine={menu.message.authorUid === selfUid}
           current={myReaction(fresh(menu.message)!, selfUid)}
+          expanded={menu.expanded}
+          guardClicks={!menu.fromPicker}
+          onExpand={(expanded) => setMenu({ ...menu, expanded })}
           onClose={() => setMenu(null)}
           onReact={(emoji) => {
-            props.onReactMessage(menu.message.id, emoji);
+            reactMessage(menu.message.id, emoji);
             setMenu(null);
           }}
           onReply={() => {
@@ -156,7 +167,8 @@ function ChatList({
   messages: ChatMessage[];
   selfUid: string;
   activeId: string | null;
-  onOpenMenu(message: ChatMessage, rect: DOMRect): void;
+  /** expanded — сразу с развёрнутым полным списком реакций. */
+  onOpenMenu(message: ChatMessage, rect: DOMRect, expanded?: boolean): void;
   onReact(id: string, emoji: string): void;
   onReply(m: ChatMessage): void;
   onEdit(m: ChatMessage): void;
@@ -305,21 +317,21 @@ function ChatList({
                           </button>
                         )}
                         {picker === m.id && (
-                          <div className="msg__picker">
-                            {MESSAGE_REACTIONS.map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                className={own === emoji ? "is-mine" : ""}
-                                onClick={() => {
-                                  onReact(m.id, emoji);
-                                  setPicker(null);
-                                }}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
+                          <QuickReactions
+                            className="msg__picker"
+                            current={own}
+                            expanded={false}
+                            onPick={(emoji) => {
+                              onReact(m.id, emoji);
+                              setPicker(null);
+                            }}
+                            // полный список не помещается в кружок у сообщения — открываем его в меню
+                            onExpand={(e) => {
+                              const bubble = e.currentTarget.closest(".msg")?.querySelector(".bubble");
+                              setPicker(null);
+                              if (bubble) onOpenMenu(m, bubble.getBoundingClientRect(), true);
+                            }}
+                          />
                         )}
                       </div>
                     </div>
@@ -340,6 +352,9 @@ function MessageMenu({
   rect,
   mine,
   current,
+  expanded,
+  guardClicks,
+  onExpand,
   onClose,
   onReact,
   onReply,
@@ -349,6 +364,9 @@ function MessageMenu({
   rect: DOMRect;
   mine: boolean;
   current?: string;
+  expanded: boolean;
+  guardClicks: boolean;
+  onExpand(expanded: boolean): void;
   onClose(): void;
   onReact(emoji: string): void;
   onReply(): void;
@@ -359,21 +377,23 @@ function MessageMenu({
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Когда отпускаешь палец после долгого нажатия, браузер присылает «клик» — он попал бы
   // в фон и тут же закрыл меню (или нажал реакцию под пальцем). Первые полсекунды клики игнорируем.
-  const openedAt = useRef(performance.now());
+  // Меню, открытое кнопкой «все реакции» в кружке у сообщения, такой защиты не требует.
+  const openedAt = useRef(guardClicks ? performance.now() : -Infinity);
   const tooSoon = () => performance.now() - openedAt.current < 500;
 
   // Меню рядом с сообщением: снизу, если хватает места, иначе сверху; не вылезает за экран.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
+    // offset*, а не getBoundingClientRect: тот учитывает анимацию появления, когда меню ещё уменьшено
+    const { offsetWidth: width, offsetHeight: height } = el;
     const vw = window.innerWidth;
     const vh = window.visualViewport?.height ?? window.innerHeight;
     const left = Math.min(Math.max(8, mine ? rect.right - width : rect.left), vw - width - 8);
     const below = rect.bottom + 8;
     const top = below + height < vh - 8 ? below : Math.max(8, rect.top - height - 8);
     setPos({ left, top });
-  }, [rect, mine]);
+  }, [rect, mine, expanded]);
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
@@ -403,29 +423,90 @@ function MessageMenu({
         }}
         style={pos ? { left: pos.left, top: pos.top } : { visibility: "hidden", left: 0, top: 0 }}
       >
-        <div className="msg-menu__reactions">
-          {MESSAGE_REACTIONS.map((emoji) => (
-            <button key={emoji} type="button" className={current === emoji ? "is-mine" : ""} onClick={() => onReact(emoji)} aria-label={`Реакция ${emoji}`}>
-              {emoji}
+        <QuickReactions className="msg-menu__reactions" current={current} expanded={expanded} onPick={onReact} onExpand={() => onExpand(!expanded)} />
+        {/* Как в Telegram: развёрнутый список встаёт на место пунктов меню, свернул — они вернулись. */}
+        {expanded ? (
+          <AllReactions current={current} onPick={onReact} />
+        ) : (
+          <div className="msg-menu__actions">
+            <button type="button" role="menuitem" onClick={onReply}>
+              <Reply size={17} /> Ответить
             </button>
-          ))}
-        </div>
-        <div className="msg-menu__actions">
-          <button type="button" role="menuitem" onClick={onReply}>
-            <Reply size={17} /> Ответить
-          </button>
-          {mine && (
-            <button type="button" role="menuitem" onClick={onEdit}>
-              <Pencil size={16} /> Изменить
+            {mine && (
+              <button type="button" role="menuitem" onClick={onEdit}>
+                <Pencil size={16} /> Изменить
+              </button>
+            )}
+            <button type="button" role="menuitem" onClick={onCopy}>
+              <Copy size={16} /> Копировать
             </button>
-          )}
-          <button type="button" role="menuitem" onClick={onCopy}>
-            <Copy size={16} /> Копировать
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </>,
     document.body,
+  );
+}
+
+// ---------------------------------------------------------------- выбор реакции
+
+/**
+ * Быстрый ряд реакций: частые у этого человека — впереди, остальное — стандартный набор.
+ * Порядок фиксируется при открытии, чтобы ряд не прыгал под пальцем. Последняя кнопка
+ * разворачивает и сворачивает полный список.
+ */
+function QuickReactions({
+  className,
+  current,
+  expanded,
+  onPick,
+  onExpand,
+}: {
+  className: string;
+  current?: string;
+  expanded: boolean;
+  onPick(emoji: string): void;
+  onExpand(e: React.MouseEvent<HTMLButtonElement>): void;
+}) {
+  const [quick] = useState(quickReactions);
+  return (
+    <div className={className}>
+      {quick.map((emoji) => (
+        <button key={emoji} type="button" className={current === emoji ? "is-mine" : ""} onClick={() => onPick(emoji)} aria-label={`Реакция ${emoji}`}>
+          {emoji}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="reaction-more"
+        aria-label={expanded ? "Свернуть реакции" : "Все реакции"}
+        title={expanded ? "Свернуть" : "Все реакции"}
+        aria-expanded={expanded}
+        onClick={onExpand}
+      >
+        {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+    </div>
+  );
+}
+
+/** Полный список реакций по разделам, с прокруткой. */
+function AllReactions({ current, onPick }: { current?: string; onPick(emoji: string): void }) {
+  return (
+    <div className="reaction-all" role="listbox" aria-label="Все реакции">
+      {REACTION_GROUPS.map((group) => (
+        <section key={group.title}>
+          <h4>{group.title}</h4>
+          <div className="reaction-all__grid">
+            {group.emojis.map((emoji) => (
+              <button key={emoji} type="button" className={current === emoji ? "is-mine" : ""} onClick={() => onPick(emoji)} aria-label={`Реакция ${emoji}`}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 

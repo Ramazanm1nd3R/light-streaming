@@ -38,7 +38,7 @@ const MUTANTS = [
   { file: "server/realtime.ts", desc: "можно править чужие сообщения", find: "if (!message || !text || message.authorUid !== self.uid || message.text === text) return;", replace: "if (!message || !text || message.text === text) return;" },
   { file: "server/realtime.ts", desc: "правка на тот же текст рассылается", find: "if (!message || !text || message.authorUid !== self.uid || message.text === text) return;", replace: "if (!message || !text || message.authorUid !== self.uid) return;" },
   { file: "server/realtime.ts", desc: "правка не обновляет цитаты в ответах", find: "reply.replyTo.text = snippet(text);", replace: "" },
-  { file: "server/realtime.ts", desc: "реакции не из списка принимаются", find: "if (!message || !(MESSAGE_REACTIONS as readonly string[]).includes(msg.emoji)) return;", replace: "if (!message) return;" },
+  { file: "server/realtime.ts", desc: "реакции не из списка принимаются", find: "if (!message || !isMessageReaction(msg.emoji)) return;", replace: "if (!message) return;" },
   { file: "server/realtime.ts", desc: "повторная реакция не снимается", find: "if (had !== msg.emoji) {", replace: "if (true) {" },
   { file: "server/realtime.ts", desc: "реакции копятся вместо замены", find: "const rest = list.filter((r) => r.uid !== self.uid);", replace: "const rest = list;" },
   { file: "server/realtime.ts", desc: "uid меняется при переподключении", find: 'const secret = typeof key === "string" && key.length >= 16 ? key.slice(0, 128) : randomUUID();', replace: "const secret = randomUUID();" },

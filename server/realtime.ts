@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import { setControl } from "./hyperbeam.ts";
 import { getRoom, iceServers, isOwner, onRoomEnded, setOccupancy } from "./room.ts";
-import { MESSAGE_REACTIONS, type ChatMessage, type ClientMessage, type Participant, type ServerMessage } from "../shared/protocol.ts";
+import { isMessageReaction, type ChatMessage, type ClientMessage, type Participant, type ServerMessage } from "../shared/protocol.ts";
 
 const HISTORY_LIMIT = 200;
 const MAX_TEXT = 1000;
@@ -134,7 +134,7 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
       if (now - client.lastChatActionAt < 120) return;
       client.lastChatActionAt = now;
       const message = findMessage(msg.id);
-      if (!message || !(MESSAGE_REACTIONS as readonly string[]).includes(msg.emoji)) return;
+      if (!message || !isMessageReaction(msg.emoji)) return;
       // Одна реакция от человека: та же — снимается, другая — заменяет прежнюю.
       const had = Object.entries(message.reactions).find(([, list]) => list.some((r) => r.uid === self.uid))?.[0];
       for (const [emoji, list] of Object.entries(message.reactions)) {

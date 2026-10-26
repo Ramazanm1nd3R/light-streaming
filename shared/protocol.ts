@@ -143,5 +143,40 @@ export type SignalData =
 
 export const REACTIONS = ["❤️", "😂", "😮", "😭", "🔥", "👏", "😡", "👀"] as const;
 
-/** Реакции на сообщения в чате. */
+/** Стандартный быстрый набор реакций на сообщения — пока человек не накопил своих частых. */
 export const MESSAGE_REACTIONS = ["👍", "❤️", "😂", "😮", "😭", "🔥", "👏", "👀"] as const;
+
+/** Полный список реакций на сообщения, по разделам — разворачивается под быстрым набором. */
+export const REACTION_GROUPS: { title: string; emojis: string[] }[] = [
+  {
+    title: "Смайлы",
+    emojis: `😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👻 👽 🤖 😺 😸 😹 😻 😼 🙀 😿 😾 🙈 🙉 🙊`.split(" "),
+  },
+  {
+    title: "Жесты и люди",
+    emojis: `👍 👎 👌 🤌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💪 🫶 🫡 👀 🧠 🤷 🤦 🙋 🙆 🙅 💃 🕺 👑`.split(" "),
+  },
+  {
+    title: "Сердца и символы",
+    emojis: `❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💋 💯 💢 💥 💫 💦 💨 💤 💬 ✅ ❌ ❓ ❗ ‼️ ⚠️ 🆗 🆒 🆕 🔝`.split(" "),
+  },
+  {
+    title: "Природа",
+    emojis: `🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🦄 🐝 🦋 🐌 🐢 🐍 🐙 🦀 🐬 🐳 🦈 🌵 🌲 🌴 🍀 🌸 🌹 🌻 🌈 ☀️ 🌙 ⭐ 🌟 ⚡ ❄️ 🔥 🌊`.split(" "),
+  },
+  {
+    title: "Еда",
+    emojis: `🍎 🍓 🍒 🍑 🍍 🥑 🍆 🌶️ 🍕 🍔 🍟 🌭 🌮 🍣 🍜 🍿 🍩 🍪 🎂 🍰 🍫 🍭 ☕ 🍵 🧋 🍺 🍻 🥂 🍷 🥃 🍾`.split(" "),
+  },
+  {
+    title: "Занятия и вещи",
+    emojis: `🎉 🎊 🎁 🎈 🏆 🥇 ⚽ 🏀 🎮 🎲 🎯 🎬 🎵 🎶 🎤 🎧 📺 📱 💻 📸 💡 💰 💎 🔔 📌 🚀 ✈️ 🚗 🏠 ⏰`.split(" "),
+  },
+];
+
+const MESSAGE_REACTION_SET = new Set(REACTION_GROUPS.flatMap((g) => g.emojis));
+
+/** Можно ли поставить такую реакцию на сообщение: только эмодзи из полного списка. */
+export function isMessageReaction(emoji: unknown): emoji is string {
+  return typeof emoji === "string" && MESSAGE_REACTION_SET.has(emoji);
+}

@@ -2536,6 +2536,7 @@ p {
 
 .msg-menu__reactions {
   display: flex;
+  min-width: 0;
   gap: 2px;
   padding: 5px;
   border-radius: 999px;
@@ -2544,10 +2545,76 @@ p {
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
 }
 
+/* кнопки сжимаются, если ряд с «все реакции» не помещается в узкий экран */
 .msg-menu__reactions button {
+  flex: 0 1 auto;
   width: 38px;
+  min-width: 0;
+  aspect-ratio: 1;
+  font-size: 22px;
+}
+
+/* кнопка «все реакции» в конце быстрого ряда */
+.msg__picker .reaction-more,
+.msg-menu__reactions .reaction-more {
+  color: var(--muted);
+  background: var(--glass);
+}
+
+.msg__picker .reaction-more:hover,
+.msg-menu__reactions .reaction-more:hover {
+  color: var(--text);
+  transform: none;
+}
+
+/* полный список: ширина — по быстрому ряду, высота ограничена, внутри прокрутка */
+.reaction-all {
+  width: 0;
+  min-width: 100%;
+  max-height: min(300px, 46vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 6px 8px;
+  border-radius: 16px;
+  background: rgba(28, 30, 40, 0.97);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+  animation: pop 0.14s ease-out;
+}
+
+.reaction-all h4 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 4px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: rgba(28, 30, 40, 0.97);
+}
+
+.reaction-all__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+}
+
+.reaction-all__grid button {
+  display: grid;
+  place-items: center;
   height: 38px;
   font-size: 22px;
+  border-radius: 10px;
+  transition: transform 0.12s;
+}
+
+.reaction-all__grid button:hover {
+  transform: scale(1.18);
+}
+
+.reaction-all__grid .is-mine {
+  background: rgba(91, 114, 255, 0.35);
 }
 
 .msg-menu__actions {
