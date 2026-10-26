@@ -471,7 +471,15 @@ function Composer({
     if (!value) return;
     onSend(value);
     setText(editing ? draft.current : "");
+    // Как в мессенджере: клавиатура остаётся открытой, можно сразу писать следующее.
+    input.current?.focus({ preventScroll: true });
   };
+
+  // Кнопки рядом с полем не должны забирать у него фокус. Иначе на телефоне первое касание
+  // только закрывает клавиатуру, раскладка прыгает, кнопка уезжает из-под пальца —
+  // и сообщение отправляется лишь со второго раза. Отменяем именно mousedown: на нём браузер
+  // меняет фокус, а отмена pointerdown в Safari гасит и сам клик.
+  const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape" && (editing || replyTo)) {
@@ -515,6 +523,7 @@ function Composer({
           className={`composer__emoji${picker ? " is-on" : ""}`}
           aria-label="Реакции"
           aria-expanded={picker}
+          onMouseDown={keepFocus}
           onClick={() => setPicker((v) => !v)}
         >
           <Smile size={20} />
@@ -534,7 +543,13 @@ function Composer({
           enterKeyHint={editing ? "done" : "send"}
           autoComplete="off"
         />
-        <button type="submit" className="composer__send" aria-label={editing ? "Сохранить" : "Отправить"} disabled={!text.trim()}>
+        <button
+          type="submit"
+          className="composer__send"
+          aria-label={editing ? "Сохранить" : "Отправить"}
+          disabled={!text.trim()}
+          onMouseDown={keepFocus}
+        >
           {editing ? <Pencil size={17} /> : <SendHorizontal size={18} />}
         </button>
       </form>
