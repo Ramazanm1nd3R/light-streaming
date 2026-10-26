@@ -191,24 +191,6 @@ function openInBrowser(url: string): void {
   spawn("open", [url], { stdio: "ignore", detached: true }).unref();
 }
 
-/** npm run watch: дождаться публичного адреса, создать комнату и открыть её как ведущий. */
-async function autoStart(): Promise<void> {
-  const deadline = Date.now() + 30_000;
-  while (tunnelStatus().state === "starting" && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  await printShare();
-  try {
-    const room = await startRoom(
-      { startUrl: config.startUrl, quality: "smooth", region: config.region, fps: 30, guestControl: true },
-      "Ведущий",
-    );
-    // Токен владельца передаётся в ссылке один раз — браузер запомнит его и уберёт из адреса.
-    if (config.autoOpen) openInBrowser(`http://localhost:${WEB_PORT}/?owner=${room.ownerToken}`);
-  } catch (err) {
-    console.error("[watch] не удалось создать комнату:", err);
-  }
-}
 
 // ---------------------------------------------------------------- запуск
 
@@ -239,7 +221,8 @@ server.listen(config.port, async () => {
   В Wi-Fi сети:     ${lan ? `http://${lan}:${WEB_PORT}` : "—"}
 `);
   startTunnel(WEB_PORT);
-  if (config.autoRoom) void autoStart();
+  // npm run watch: открываем общую страницу — комнату создаёт человек, а не сервер при старте.
+  if (config.openBrowser) openInBrowser(`http://localhost:${WEB_PORT}`);
   // Туннеля нет (не установлен cloudflared, PUBLIC_URL=off) или он так и не поднялся —
   // печатаем адрес в Wi-Fi сети. Публичный адрес, если появится, напечатается сам.
   setTimeout(() => tunnelStatus().state !== "starting" && void printShare(), 1500);

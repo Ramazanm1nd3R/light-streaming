@@ -13,7 +13,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "npm run build && NODE_ENV=production tsx server/index.ts",
-    "watch": "npm run build && NODE_ENV=production AUTO_ROOM=1 tsx server/index.ts",
+    "watch": "npm run build && NODE_ENV=production OPEN_BROWSER=1 tsx server/index.ts",
     "serve": "NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

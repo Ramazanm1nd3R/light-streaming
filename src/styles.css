@@ -2182,6 +2182,8 @@ p {
 
 .share-box {
   display: grid;
+  /* длинный адрес туннеля обрезается многоточием, а не распирает карточку */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   padding-top: 14px;
   border-top: 1px solid var(--stroke);

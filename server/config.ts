@@ -20,10 +20,8 @@ export const config = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-  // npm run watch: сразу создать комнату, вывести ссылку с QR-кодом и открыть страницу ведущего.
-  autoRoom: process.env.AUTO_ROOM === "1",
-  autoOpen: process.env.AUTO_OPEN !== "0",
-  startUrl: process.env.START_URL?.trim() || "https://www.youtube.com",
+  // npm run watch: после старта открыть общую страницу в браузере.
+  openBrowser: process.env.OPEN_BROWSER === "1",
   // Пароль, которым любой участник может закрыть комнату (например, если ведущий вылетел).
   roomPassword: process.env.ROOM_PASSWORD?.trim() || "12345",
   // Пустая комната закрывается сама через столько секунд.
