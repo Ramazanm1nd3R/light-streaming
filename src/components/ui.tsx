@@ -137,17 +137,23 @@ export function Sheet({ title, onClose, children, className = "" }: { title: str
   );
 }
 
+/** Знак: кружка с паром и кнопкой воспроизведения — стриминг на чилле, с кофейком. */
 export function Logo({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="logo">
       <defs>
-        <linearGradient id="lsg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#8fa2ff" />
-          <stop offset="1" stopColor="#4d63ff" />
+        <linearGradient id="ls-mug" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#a7b3ff" />
+          <stop offset="1" stopColor="#5a6bff" />
         </linearGradient>
       </defs>
-      <rect x="2" y="6" width="28" height="20" rx="7" fill="url(#lsg)" />
-      <path d="M13.5 11.8v8.4c0 .6.7 1 1.2.7l6.6-4.2c.5-.3.5-1.1 0-1.4l-6.6-4.2c-.5-.3-1.2.1-1.2.7Z" fill="#fff" />
+      <g stroke="#ffd3ad" strokeWidth="1.7" strokeLinecap="round" fill="none">
+        <path d="M11.2 9.8c-1.5-1.4 1.5-2.7 0-4.3" />
+        <path d="M16.4 9.8c-1.5-1.4 1.5-2.7 0-4.3" />
+      </g>
+      <path d="M23.2 15.2h1.3a3.6 3.6 0 0 1 0 7.2h-1.3" stroke="url(#ls-mug)" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+      <rect x="4" y="12" width="20" height="15.5" rx="5.5" fill="url(#ls-mug)" />
+      <path d="M12.2 16.6v6.3c0 .65.72 1.05 1.27.7l4.95-3.15c.5-.32.5-1.08 0-1.4l-4.95-3.15c-.55-.35-1.27.05-1.27.7Z" fill="#fff" />
     </svg>
   );
 }
