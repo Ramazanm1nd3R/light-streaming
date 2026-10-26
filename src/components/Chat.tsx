@@ -44,7 +44,7 @@ export function ChatArea(props: ChatAreaProps) {
   const { messages, selfUid } = props;
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
-  const [menu, setMenu] = useState<{ message: ChatMessage; rect: DOMRect; expanded: boolean; fromPicker: boolean } | null>(null);
+  const [menu, setMenu] = useState<{ message: ChatMessage; rect: DOMRect; expanded: boolean; byTouch: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Сообщение могли отредактировать или отреагировать на него, пока открыто меню / ответ.
@@ -83,10 +83,10 @@ export function ChatArea(props: ChatAreaProps) {
       messages={messages}
       selfUid={selfUid}
       activeId={menu?.message.id ?? null}
-      onOpenMenu={(message, rect, expanded = false) => {
+      onOpenMenu={(message, rect, { expanded = false, byTouch = false } = {}) => {
         // если iOS успела начать своё выделение по долгому нажатию — сбрасываем его
         window.getSelection()?.removeAllRanges();
-        setMenu({ message, rect, expanded, fromPicker: expanded });
+        setMenu({ message, rect, expanded, byTouch });
       }}
       onReact={reactMessage}
       onReply={startReply}
@@ -127,7 +127,7 @@ export function ChatArea(props: ChatAreaProps) {
           mine={menu.message.authorUid === selfUid}
           current={myReaction(fresh(menu.message)!, selfUid)}
           expanded={menu.expanded}
-          guardClicks={!menu.fromPicker}
+          guardClicks={menu.byTouch}
           onExpand={(expanded) => setMenu({ ...menu, expanded })}
           onClose={() => setMenu(null)}
           onReact={(emoji) => {
@@ -167,8 +167,8 @@ function ChatList({
   messages: ChatMessage[];
   selfUid: string;
   activeId: string | null;
-  /** expanded — сразу с развёрнутым полным списком реакций. */
-  onOpenMenu(message: ChatMessage, rect: DOMRect, expanded?: boolean): void;
+  /** expanded — сразу с развёрнутым полным списком реакций; byTouch — открыто пальцем, а не мышью. */
+  onOpenMenu(message: ChatMessage, rect: DOMRect, opts?: { expanded?: boolean; byTouch?: boolean }): void;
   onReact(id: string, emoji: string): void;
   onReply(m: ChatMessage): void;
   onEdit(m: ChatMessage): void;
@@ -209,13 +209,15 @@ function ChatList({
   };
 
   // Долгое нажатие на телефоне открывает меню сообщения.
+  const lastPointer = useRef("mouse");
   const pressStart = (m: ChatMessage) => (e: PointerEvent<HTMLDivElement>) => {
+    lastPointer.current = e.pointerType;
     if (e.pointerType === "mouse") return;
     const bubble = e.currentTarget;
     const timer = window.setTimeout(() => {
       press.current = null;
       navigator.vibrate?.(12);
-      onOpenMenu(m, bubble.getBoundingClientRect());
+      onOpenMenu(m, bubble.getBoundingClientRect(), { byTouch: true });
     }, 420);
     press.current = { timer, x: e.clientX, y: e.clientY };
   };
@@ -267,7 +269,8 @@ function ChatList({
                         onContextMenu={(e) => {
                           e.preventDefault();
                           pressEnd();
-                          onOpenMenu(m, e.currentTarget.getBoundingClientRect());
+                          // Android тоже присылает contextmenu на долгое нажатие — тогда защита от клика нужна.
+                          onOpenMenu(m, e.currentTarget.getBoundingClientRect(), { byTouch: lastPointer.current !== "mouse" });
                         }}
                       >
                         {m.replyTo && (
@@ -329,7 +332,7 @@ function ChatList({
                             onExpand={(e) => {
                               const bubble = e.currentTarget.closest(".msg")?.querySelector(".bubble");
                               setPicker(null);
-                              if (bubble) onOpenMenu(m, bubble.getBoundingClientRect(), true);
+                              if (bubble) onOpenMenu(m, bubble.getBoundingClientRect(), { expanded: true });
                             }}
                           />
                         )}
@@ -377,7 +380,7 @@ function MessageMenu({
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   // Когда отпускаешь палец после долгого нажатия, браузер присылает «клик» — он попал бы
   // в фон и тут же закрыл меню (или нажал реакцию под пальцем). Первые полсекунды клики игнорируем.
-  // Меню, открытое кнопкой «все реакции» в кружке у сообщения, такой защиты не требует.
+  // Мышью такого «клика» не бывает — меню, открытое правым кликом или кнопкой «все реакции», без защиты.
   const openedAt = useRef(guardClicks ? performance.now() : -Infinity);
   const tooSoon = () => performance.now() - openedAt.current < 500;
 
