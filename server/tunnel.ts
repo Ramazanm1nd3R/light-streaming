@@ -17,6 +17,12 @@ const listeners = new Set<(url: string | null) => void>();
 
 const MAX_RESTARTS = 6;
 
+// Страховка: если сервер завершается не через штатный Ctrl+C (необработанная ошибка,
+// process.exit из кода), туннель не должен остаться работать сам по себе.
+process.on("exit", () => {
+  child?.kill("SIGTERM");
+});
+
 export function tunnelStatus() {
   return {
     state,
