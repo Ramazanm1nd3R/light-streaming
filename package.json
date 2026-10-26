@@ -15,7 +15,8 @@
     "start": "npm run build && NODE_ENV=production tsx server/index.ts",
     "watch": "npm run build && NODE_ENV=production OPEN_BROWSER=1 tsx server/index.ts",
     "serve": "NODE_ENV=production tsx server/index.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@hyperbeam/web": "0.0.38",
