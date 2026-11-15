@@ -20,15 +20,25 @@ const REASONS: Record<string, string> = {
   unauthorized: "Ссылка больше не действует",
 };
 
-// Если за это время кадры так и не пошли — пересоздаём медиасоединение.
+// Если за это время кадры так и не пошли — пересоздаём медиасоединение. Бывает, что самое первое
+// соединение с Hyperbeam уже «играет», а видео так и не приходит, — его переподключаем быстрее.
+// Во всех остальных случаях не торопим: на медленной сети (iPhone в мобильном интернете) ранний
+// перезапуск обрывал бы рукопожатие или только что начатое переподключение.
 const STALL_SECONDS = 12;
-const MAX_AUTO_RETRIES = 3;
+const FIRST_FRAME_SECONDS = 6;
+// SDK повторяет подключение сам и может так и не ответить — тогда сторож ниже ещё не работает.
+// Вместо вечного «Подключаемся…» показываем экран ошибки с кнопкой «Повторить».
+const INIT_TIMEOUT_MS = 20_000;
+const MAX_AUTO_RETRIES = 4;
 
-/** Есть ли реальные кадры. Видео у SDK лежит в shadow DOM контейнера; в Safari по http — canvas. */
+/**
+ * Есть ли реальные кадры. Видео у SDK лежит в shadow DOM контейнера; в Safari по http — canvas.
+ * Сразу после переподключения SDK ставит заглушку 2×2 — это ещё не видео (настоящее — от 256 px).
+ */
 function hasFrames(el: HTMLDivElement): boolean | null {
   const video = el.shadowRoot?.querySelector("video");
   if (!video) return null;
-  return video.videoWidth > 0 && video.readyState >= 2;
+  return video.videoWidth > 16 && video.readyState >= 2;
 }
 
 /**
@@ -48,6 +58,7 @@ export function useHyperbeam(container: RefObject<HTMLDivElement | null>, option
   const stateRef = useRef<StreamState>("idle");
   const retries = useRef(0);
   const stalled = useRef(0);
+  const gotFrames = useRef(false);
 
   const update = useCallback((next: StreamState) => {
     stateRef.current = next;
@@ -63,7 +74,14 @@ export function useHyperbeam(container: RefObject<HTMLDivElement | null>, option
     let instance: HyperbeamEmbed | null = null;
     retries.current = 0;
     stalled.current = 0;
+    gotFrames.current = false;
     update("connecting");
+
+    const initTimer = window.setTimeout(() => {
+      if (instance || disposed) return;
+      console.warn("[hyperbeam] SDK не ответил за 20 с");
+      update("failed");
+    }, INIT_TIMEOUT_MS);
 
     (async () => {
       const { default: Hyperbeam } = await import("@hyperbeam/web");
@@ -86,10 +104,13 @@ export function useHyperbeam(container: RefObject<HTMLDivElement | null>, option
         if (!disposed) update("failed");
         return;
       }
+      clearTimeout(initTimer);
       if (disposed) {
         instance.destroy();
         return;
       }
+      // SDK всё-таки ответил после экрана ошибки — соединение живо, показываем видео.
+      if (stateRef.current === "failed") update("connecting");
       setHb(instance);
     })();
 
@@ -104,17 +125,19 @@ export function useHyperbeam(container: RefObject<HTMLDivElement | null>, option
       if (ok) {
         stalled.current = 0;
         retries.current = 0;
+        if (frames) gotFrames.current = true;
         return;
       }
       stalled.current += 2;
-      if (stalled.current < STALL_SECONDS) return;
+      const noFirstFrame = current === "playing" && !gotFrames.current && retries.current === 0;
+      if (stalled.current < (noFirstFrame ? FIRST_FRAME_SECONDS : STALL_SECONDS)) return;
       stalled.current = 0;
       if (retries.current >= MAX_AUTO_RETRIES) {
         update("failed");
         return;
       }
       retries.current += 1;
-      console.warn(`[hyperbeam] кадры не идут ${STALL_SECONDS} с — переподключение #${retries.current}`);
+      console.warn(`[hyperbeam] кадры не идут — переподключение #${retries.current}`);
       optsRef.current?.onNotice("Видео не пришло — переподключаюсь…");
       update("reconnecting");
       instance.reconnect();
@@ -122,6 +145,7 @@ export function useHyperbeam(container: RefObject<HTMLDivElement | null>, option
 
     return () => {
       disposed = true;
+      clearTimeout(initTimer);
       clearInterval(timer);
       instance?.destroy();
       setHb(null);
