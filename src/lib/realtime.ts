@@ -2,6 +2,14 @@ import type { ClientMessage, ServerMessage } from "../../shared/protocol.ts";
 
 export type SocketState = "connecting" | "open" | "reconnecting" | "closed";
 
+// Сообщения, правки и реакции, отправленные без связи (сокет ещё подключается или переподключается),
+// не теряются, а уходят сразу после переподключения. Летящие реакции, пинги и сигнализация голоса
+// через минуту бессмысленны, а id участников после переподключения другие — их в очередь не берём.
+const QUEUED: ReadonlySet<ClientMessage["t"]> = new Set(["chat", "edit", "react"]);
+const QUEUE_LIMIT = 50;
+// Сервер принимает реакции на сообщения не чаще раза в 120 мс — очередь уходит с интервалом.
+const FLUSH_GAP_MS = 150;
+
 /**
  * WebSocket с автоматическим переподключением. Смена Wi-Fi на LTE или уход
  * Safari в фон рвут соединение — клиент тихо восстанавливает его с нарастающей паузой.
@@ -12,6 +20,7 @@ export class Realtime {
   private stopped = false;
   private retryTimer: number | undefined;
   private pingTimer: number | undefined;
+  private pending: ClientMessage[] = [];
   private readonly onVisible = () => {
     const state = this.socket?.readyState;
     if (document.visibilityState === "visible" && state !== WebSocket.OPEN && state !== WebSocket.CONNECTING) {
@@ -30,7 +39,19 @@ export class Realtime {
   }
 
   send(msg: ClientMessage): void {
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(msg));
+    const open = this.socket?.readyState === WebSocket.OPEN;
+    // Пока уходит очередь, новое сообщение чата встаёт за ней, чтобы не обогнать отправленные раньше.
+    if (QUEUED.has(msg.t) && (!open || this.pending.length)) this.pending = [...this.pending, msg].slice(-QUEUE_LIMIT);
+    else if (open) this.socket!.send(JSON.stringify(msg));
+  }
+
+  /** Отправить накопленное без связи — по порядку, пока сокет открыт. */
+  private flush(socket: WebSocket): void {
+    const next = this.pending[0];
+    if (!next || this.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify(next));
+    this.pending.shift();
+    if (this.pending.length) window.setTimeout(() => this.flush(socket), FLUSH_GAP_MS);
   }
 
   close(): void {
@@ -51,6 +72,7 @@ export class Realtime {
       this.attempt = 0;
       this.onState("open");
       socket.send(JSON.stringify(this.hello()));
+      this.flush(socket);
       clearInterval(this.pingTimer);
       this.pingTimer = window.setInterval(() => this.send({ t: "ping", at: performance.now() }), 5000);
     };
