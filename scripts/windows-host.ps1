@@ -83,7 +83,9 @@ powercfg /setactive SCHEME_CURRENT
 Stop-Host
 Start-ScheduledTask -TaskName $task
 Start-Sleep -Seconds 8
-$lan = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -like "Ethernet*" -and $_.IPAddress -notlike "169.254.*" }).IPAddress | Select-Object -First 1
+# адрес того адаптера, через который идёт интернет: не VPN и не виртуальные адаптеры с похожими именами
+$route = Get-NetRoute -DestinationPrefix 0.0.0.0/0 | Sort-Object { $_.RouteMetric + $_.InterfaceMetric } | Select-Object -First 1
+$lan = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $route.InterfaceIndex | Where-Object IPAddress -notlike "169.254.*").IPAddress | Select-Object -First 1
 "Сервис: $((Get-ScheduledTask -TaskName $task).State)"
 "В домашней сети: http://${lan}:$port"
 "Публичная ссылка и статус туннеля: http://${lan}:$port/api/status (поле publicUrl), лог: $hostDir\server.log"
