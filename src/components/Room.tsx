@@ -470,7 +470,16 @@ export function Room(props: Props) {
 
       {/* Сцена всегда в одном и том же контейнере: при повороте телефона меняется только класс.
           Если бы React пересоздал её, Hyperbeam остался бы привязан к удалённому элементу — чёрный экран. */}
-      <div className={layout === "portrait" ? "stage-slot" : "theater"}>{stage}</div>
+      <div
+        className={layout === "portrait" ? "stage-slot" : "theater"}
+        // Телефон горизонтально: касание по чёрным полосам вокруг кадра тоже показывает спрятанные
+        // панели — кнопки стоят как раз там, и без этого касание по ним не делало ничего.
+        // Именно click, а не pointerup: иначе панели появятся раньше клика, и он нажмёт кнопку,
+        // оказавшуюся под пальцем, — например, микрофон.
+        onClick={(e) => overlayMode && e.target === e.currentTarget.querySelector(".stage") && ui.show()}
+      >
+        {stage}
+      </div>
 
       {layout === "portrait" ? (
         <>

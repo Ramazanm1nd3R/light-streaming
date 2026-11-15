@@ -5,16 +5,23 @@ export type Layout = "portrait" | "landscape" | "desktop";
 function current(): Layout {
   const portrait = window.matchMedia("(orientation: portrait)").matches;
   const coarse = window.matchMedia("(pointer: coarse)").matches;
-  if (portrait && window.innerWidth < 900) return "portrait";
+  // Планшет — сенсорный экран, у которого и короткая сторона большая (iPad, Galaxy Tab).
+  const tablet = coarse && Math.min(window.innerWidth, window.innerHeight) >= 600;
+  if (portrait && (window.innerWidth < 900 || coarse)) return "portrait";
+  if (tablet) return "desktop";
   if (coarse || window.innerHeight < 560) return "landscape";
   return "desktop";
 }
 
 /**
  * Три режима интерфейса:
- *  portrait  — телефон вертикально: видео сверху, чат живёт в свободном месте под ним, ничего не перекрывает;
+ *  portrait  — телефон или планшет вертикально: видео сверху, чат живёт в свободном месте под ним, ничего не перекрывает;
  *  landscape — телефон горизонтально: видео на весь экран, всё остальное — полупрозрачные слои, которые прячутся;
- *  desktop   — большой экран: чат можно закрепить сбоку, видео при этом ужимается, а не перекрывается.
+ *  desktop   — компьютер и планшет горизонтально: панели стоят в полосах над и под видео и не прячутся,
+ *              чат закрепляется сбоку, видео при этом ужимается, а не перекрывается.
+ *
+ * Планшету нельзя давать режим телефона горизонтально: на большом экране исчезающие панели
+ * выглядят как кнопки, которые не нажимаются, — первое касание только показывает их обратно.
  */
 export function useLayout(): Layout {
   const [layout, setLayout] = useState<Layout>(current);
