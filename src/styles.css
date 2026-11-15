@@ -1029,6 +1029,12 @@ p {
   color: var(--muted);
   font-size: 14px;
   text-align: center;
+  /* плашка подключения не должна отнимать кнопки в углу видео — как раз когда сеть шалит */
+  pointer-events: none;
+}
+
+.stage__status button {
+  pointer-events: auto;
 }
 
 .stage__status--soft {
