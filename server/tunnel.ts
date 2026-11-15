@@ -17,6 +17,20 @@ const listeners = new Set<(url: string | null) => void>();
 
 const MAX_RESTARTS = 6;
 
+// Подсказки по установке — под систему, на которой запущен сервер (Mac ведущего или Windows-ноутбук по кабелю).
+const WINDOWS = process.platform === "win32";
+const INSTALL = WINDOWS
+  ? {
+      cloudflared: "winget install --id Cloudflare.cloudflared -e",
+      tailscale: "winget install --id Tailscale.Tailscale -e --source winget, затем tailscale up --unattended",
+      tailscaleService: "запусти службу Tailscale (services.msc) или приложение Tailscale",
+    }
+  : {
+      cloudflared: "brew install cloudflared",
+      tailscale: "для Funnel на Mac нужен вариант из Homebrew: brew install tailscale && sudo brew services start tailscale && tailscale up",
+      tailscaleService: "sudo brew services start tailscale",
+    };
+
 // Страховка: если сервер завершается не через штатный Ctrl+C (необработанная ошибка,
 // process.exit из кода), туннель не должен остаться работать сам по себе.
 process.on("exit", () => {
@@ -147,7 +161,7 @@ function cloudflare(localPort: number): Runner {
   return {
     cmd: "cloudflared",
     args,
-    missingHint: "cloudflared не найден. Установи: brew install cloudflared — или выбери PUBLIC_URL=tailscale.",
+    missingHint: `cloudflared не найден. Установи: ${INSTALL.cloudflared} — или выбери PUBLIC_URL=tailscale.`,
     scan(text) {
       const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
       if (match && !candidate) candidate = match[0];
@@ -184,7 +198,7 @@ async function startTailscale(localPort: number): Promise<void> {
 
   if (status.code === -1) {
     state = "missing";
-    setHint("Tailscale не установлен. Для Funnel на Mac нужен вариант из Homebrew: brew install tailscale && sudo brew services start tailscale && tailscale up");
+    setHint(`Tailscale не установлен: ${INSTALL.tailscale}`);
     return;
   }
   let self: { BackendState?: string; Self?: { DNSName?: string } } = {};
@@ -195,7 +209,7 @@ async function startTailscale(localPort: number): Promise<void> {
   }
   if (!self.BackendState) {
     state = "error";
-    setHint("Служба Tailscale не запущена: sudo brew services start tailscale");
+    setHint(`Служба Tailscale не запущена: ${INSTALL.tailscaleService}`);
     return;
   }
   if (self.BackendState !== "Running") {
@@ -214,7 +228,7 @@ async function startTailscale(localPort: number): Promise<void> {
   spawnTunnel(localPort, {
     cmd: "tailscale",
     args: ["funnel", String(localPort)],
-    missingHint: "Tailscale не установлен: brew install tailscale",
+    missingHint: `Tailscale не установлен: ${INSTALL.tailscale}`,
     scan(text) {
       // Первый запуск: Funnel надо один раз разрешить в аккаунте — CLI печатает ссылку и ждёт.
       const enable = text.match(/https:\/\/login\.tailscale\.com\/\S+/);
