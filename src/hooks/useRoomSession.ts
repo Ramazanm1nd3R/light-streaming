@@ -35,6 +35,24 @@ function clientKey(): string {
   return key;
 }
 
+// id подключения этой вкладки переживает и перезагрузку страницы: по нему сервер сразу убирает
+// прежнее, уже мёртвое подключение, а не держит в комнате двойника полминуты.
+const LAST_ID = "ls:lastSelfId";
+function lastSelfId(): string | undefined {
+  try {
+    return sessionStorage.getItem(LAST_ID) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+function rememberSelfId(id: string): void {
+  try {
+    sessionStorage.setItem(LAST_ID, id);
+  } catch {
+    // приватный режим — обойдёмся
+  }
+}
+
 export function useRoomSession(profile: Profile, initialMic: boolean, onEnded: (reason: string) => void) {
   const [socketState, setSocketState] = useState<SocketState>("connecting");
   const [selfId, setSelfId] = useState("");
@@ -79,6 +97,7 @@ export function useRoomSession(profile: Profile, initialMic: boolean, onEnded: (
       switch (msg.t) {
         case "welcome":
           selfRef.current = msg.selfId;
+          rememberSelfId(msg.selfId);
           setSelfId(msg.selfId);
           setSelfUid(msg.selfUid);
           setParticipants(msg.participants);
@@ -127,7 +146,14 @@ export function useRoomSession(profile: Profile, initialMic: boolean, onEnded: (
 
     const rt = new Realtime(
       wsUrl(),
-      () => ({ t: "hello", name: profile.name, color: profile.color, micOn: micRef.current, key: clientKey() }),
+      () => ({
+        t: "hello",
+        name: profile.name,
+        color: profile.color,
+        micOn: micRef.current,
+        key: clientKey(),
+        resume: selfRef.current || lastSelfId(),
+      }),
       handle,
       setSocketState,
     );

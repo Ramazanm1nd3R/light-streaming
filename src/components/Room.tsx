@@ -92,7 +92,7 @@ export function Room(props: Props) {
   const canControl = isHost || (self ? self.canControl : room.options.guestControl);
   const controlActive = canControl && (!touch || controlMode);
 
-  const { hb, state: streamState, rtt: hbRtt, retry: retryStream } = useHyperbeam(
+  const { hb, state: streamState, rtt: hbRtt, epoch: streamEpoch, retry: retryStream, refresh: refreshStream } = useHyperbeam(
     hbRef,
     room.demo
       ? null
@@ -111,9 +111,19 @@ export function Room(props: Props) {
 
   // ---- связь Hyperbeam ↔ наше состояние
 
+  // Сообщаем серверу свой id в Hyperbeam заново после каждого переподключения — и нашего
+  // (новый selfId), и видео (streamEpoch): сервер снова выставит права, если они слетели.
   useEffect(() => {
     if (hb && selfId) session.reportHyperbeamUser(hb.userId);
-  }, [hb, selfId, session.reportHyperbeamUser]);
+  }, [hb, selfId, streamEpoch, session.reportHyperbeamUser]);
+
+  // Наш сокет переподключился после обрыва — значит, сеть менялась. Соединение Hyperbeam могло
+  // остаться полуживым (картинка есть, управление не доходит) — проверяем и, если надо, чиним.
+  const prevSocket = useRef(session.socketState);
+  useEffect(() => {
+    if (prevSocket.current === "reconnecting" && session.socketState === "open") refreshStream();
+    prevSocket.current = session.socketState;
+  }, [session.socketState, refreshStream]);
 
   const othersSpeaking = useMemo(() => [...speaking].some((id) => id !== selfId), [speaking, selfId]);
 

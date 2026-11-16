@@ -133,7 +133,7 @@ export class Client {
 
   static async connect(
     server: TestServer,
-    options: { name?: string; owner?: string; key?: string; color?: string } = {},
+    options: { name?: string; owner?: string; key?: string; color?: string; resume?: string } = {},
   ): Promise<Client> {
     const params = new URLSearchParams();
     if (options.owner) params.set("owner", options.owner);
@@ -150,6 +150,7 @@ export class Client {
       color: options.color ?? "#7c8cff",
       micOn: false,
       key: options.key ?? `key-${Math.random().toString(36).slice(2)}-${Date.now()}`,
+      ...(options.resume && { resume: options.resume }),
     });
     const welcome = await client.next((m) => m.t === "welcome");
     if (welcome.t === "welcome") {

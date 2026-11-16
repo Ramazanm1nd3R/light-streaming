@@ -305,6 +305,46 @@ describe("реакции на сообщения", () => {
   });
 });
 
+describe("доставка после обрыва (cid и ack)", () => {
+  it("повтор сообщения после переподключения не задваивает его, а ack приходит оба раза", async () => {
+    await createRoom(server);
+    const key = "ключ-браузера-с-плохим-wi-fi";
+    const a = await join({ name: "Mia", key });
+    const b = await join({ name: "Jonas" });
+    a.send({ t: "chat", text: "дошло один раз", cid: "c-1" });
+    await a.next((m) => m.t === "ack" && m.cid === "c-1");
+    // ack потерялся вместе со старой сетью — браузер повторяет из нового подключения
+    const again = await join({ name: "Mia", key, resume: a.selfId });
+    again.send({ t: "chat", text: "дошло один раз", cid: "c-1" });
+    await again.next((m) => m.t === "ack" && m.cid === "c-1");
+    await sleep(200);
+    assert.equal(b.messages.filter(isChat("дошло один раз")).length, 1);
+  });
+
+  it("повтор реакции не снимает её", async () => {
+    await createRoom(server);
+    const a = await join();
+    a.send({ t: "chat", text: "реакция" });
+    const msg = await chatOf(a, "реакция");
+    a.send({ t: "react", id: msg.id, emoji: "🔥", cid: "r-1" });
+    await a.next((m) => m.t === "ack" && m.cid === "r-1");
+    await sleep(150);
+    a.send({ t: "react", id: msg.id, emoji: "🔥", cid: "r-1" });
+    await a.next((m) => m.t === "ack" && m.cid === "r-1");
+    await a.none((m) => m.t === "chat-update" && Object.keys(m.message.reactions).length === 0, 300);
+  });
+
+  it("одинаковый cid у разных людей — разные сообщения", async () => {
+    await createRoom(server);
+    const a = await join({ name: "A" });
+    const b = await join({ name: "B" });
+    a.send({ t: "chat", text: "от A", cid: "same" });
+    b.send({ t: "chat", text: "от B", cid: "same" });
+    await chatOf(a, "от A");
+    await chatOf(a, "от B");
+  });
+});
+
 describe("постоянный uid участника", () => {
   it("тот же ключ браузера — тот же uid после переподключения, и свои сообщения можно править", async () => {
     await createRoom(server);
@@ -393,6 +433,51 @@ describe("права и сигнализация", () => {
     await b.next((m) => m.t === "updated" && m.participant.id === a.selfId);
     b.send({ t: "hb-user", hbUserId: "hb-user-a" });
     await a.none((m) => m.t === "updated" && m.participant.id === b.selfId);
+  });
+
+  it("смена сети: старое подключение того же браузера убирается сразу, id Hyperbeam и права переходят к новому", async () => {
+    const { body: room } = await createRoom(server, { guestControl: false });
+    const key = "ключ-браузера-ведущего-на-маке";
+    // Старое подключение не закрываем: после смены Wi-Fi сервер ещё долго считает его живым.
+    const before = await join({ name: "Lukas", owner: room.ownerToken, key });
+    const guest = await join({ name: "Mia" });
+    before.send({ t: "hb-user", hbUserId: "hb-host" });
+    await guest.next((m) => m.t === "updated" && m.participant.id === before.selfId && m.participant.hbUserId === "hb-host");
+
+    const after = await join({ name: "Lukas", owner: room.ownerToken, key, resume: before.selfId });
+    await guest.next((m) => m.t === "left" && m.id === before.selfId);
+    const { body } = await api<StatusResponse>(server, "GET", "/api/status");
+    assert.equal(body.people.length, 2, "в комнате остался двойник ведущего");
+
+    after.send({ t: "hb-user", hbUserId: "hb-host" });
+    const upd = await guest.next<Extract<ServerMessage, { t: "updated" }>>((m) => m.t === "updated" && m.participant.id === after.selfId);
+    assert.equal(upd.participant.hbUserId, "hb-host");
+    assert.equal(upd.participant.isHost, true);
+    assert.equal(upd.participant.canControl, true);
+  });
+
+  it("перезагрузка без resume: свой id Hyperbeam можно забрать у старого подключения, чужой — нет", async () => {
+    await createRoom(server);
+    const key = "ключ-браузера-который-перезагрузили";
+    const old = await join({ name: "Mia", key });
+    const other = await join({ name: "Jonas" });
+    old.send({ t: "hb-user", hbUserId: "hb-mia" });
+    await other.next((m) => m.t === "updated" && m.participant.id === old.selfId);
+
+    const again = await join({ name: "Mia", key });
+    again.send({ t: "hb-user", hbUserId: "hb-mia" });
+    await other.next((m) => m.t === "updated" && m.participant.id === again.selfId && m.participant.hbUserId === "hb-mia");
+    other.send({ t: "hb-user", hbUserId: "hb-mia" });
+    await again.none((m) => m.t === "updated" && m.participant.id === other.selfId);
+  });
+
+  it("resume с чужим id не выкидывает другого человека", async () => {
+    await createRoom(server);
+    const victim = await join({ name: "Mia" });
+    const attacker = await join({ name: "Jonas", resume: victim.selfId });
+    await attacker.none((m) => m.t === "left", 300);
+    const { body } = await api<StatusResponse>(server, "GET", "/api/status");
+    assert.equal(body.people.length, 2);
   });
 
   it("сигнализация WebRTC уходит только адресату", async () => {

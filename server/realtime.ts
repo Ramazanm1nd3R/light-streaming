@@ -22,6 +22,28 @@ const clients = new Map<string, Client>();
 let history: ChatMessage[] = [];
 /** Решение ведущего о правах гостя — по постоянному uid, чтобы оно пережило переподключение. */
 let controlByUid = new Map<string, boolean>();
+/** Уже обработанные cid (uid:cid): повтор после обрыва не должен задвоить сообщение или реакцию. */
+let seenCids = new Set<string>();
+const SEEN_LIMIT = 5000;
+
+/** cid сообщения, которое браузер повторит после обрыва, пока не получит ack. */
+function cidOf(msg: ClientMessage): string | null {
+  return "cid" in msg && typeof msg.cid === "string" && msg.cid ? msg.cid.slice(0, 64) : null;
+}
+
+function remember(key: string): void {
+  seenCids.add(key);
+  if (seenCids.size > SEEN_LIMIT) seenCids = new Set([...seenCids].slice(-SEEN_LIMIT / 2));
+}
+
+/** Убрать подключение из комнаты сразу, не дожидаясь, пока сокет закроется сам. */
+function drop(id: string, client: Client): void {
+  if (clients.get(id) !== client) return;
+  clients.delete(id);
+  if (client.participant) broadcast({ t: "left", id });
+  setOccupancy(participants().length);
+  client.socket.terminate();
+}
 
 function send(client: Client, message: ServerMessage): void {
   if (client.socket.readyState === client.socket.OPEN) client.socket.send(JSON.stringify(message));
@@ -69,15 +91,21 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
 
   if (msg.t === "hello") {
     if (client.participant) return;
+    const uid = uidFromKey(msg.key);
+    // После смены сети старое соединение браузера ещё числится живым (сервер узнает о его смерти
+    // только через 15–30 с). Если это тот же браузер — убираем «призрака» сразу: иначе в комнате
+    // двое одинаковых, а id Hyperbeam и права остаются за мёртвым подключением.
+    const ghost = typeof msg.resume === "string" ? clients.get(msg.resume) : undefined;
+    if (ghost && ghost !== client && ghost.participant?.uid === uid) drop(msg.resume!, ghost);
     client.participant = {
       id,
       name: cleanName(msg.name),
       color: COLOR_RE.test(msg.color) ? msg.color : "#7c8cff",
       isHost: client.isHost,
       micOn: Boolean(msg.micOn),
-      canControl: client.isHost || (controlByUid.get(uidFromKey(msg.key)) ?? room.options.guestControl),
+      canControl: client.isHost || (controlByUid.get(uid) ?? room.options.guestControl),
       joinedAt: Date.now(),
-      uid: uidFromKey(msg.key),
+      uid,
     };
     send(client, {
       t: "welcome",
@@ -94,6 +122,24 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
 
   const self = client.participant;
   if (!self) return;
+
+  const cid = cidOf(msg);
+  if (cid) {
+    const key = `${self.uid}:${cid}`;
+    // Уже обработано — ack потерялся вместе со старым соединением. Подтверждаем ещё раз.
+    if (seenCids.has(key)) return send(client, { t: "ack", cid });
+    remember(key);
+  }
+  try {
+    await apply(id, client, self, msg);
+  } finally {
+    if (cid) send(client, { t: "ack", cid });
+  }
+}
+
+async function apply(id: string, client: Client, self: Participant, msg: ClientMessage): Promise<void> {
+  const room = getRoom();
+  if (!room) return;
 
   switch (msg.t) {
     case "chat": {
@@ -164,8 +210,11 @@ async function handle(id: string, client: Client, msg: ClientMessage): Promise<v
     }
     case "hb-user": {
       const hbUserId = String(msg.hbUserId).slice(0, 64);
+      const holder = participants().find((p) => p.id !== id && p.hbUserId === hbUserId);
       // Чужой id не принимаем: иначе можно было бы выдать или отобрать права у другого человека.
-      if (participants().some((p) => p.id !== id && p.hbUserId === hbUserId)) return;
+      // Свой же (тот же браузер, старое подключение после смены сети) — забираем себе.
+      if (holder && holder.uid !== self.uid) return;
+      if (holder) delete holder.hbUserId;
       self.hbUserId = hbUserId;
       // Роли по умолчанию в Hyperbeam одни на всех: управление есть у всех, если гостям его
       // разрешили, и ни у кого — если нет. Тем, чьи права отличаются (ведущему всегда, гостю —
@@ -230,6 +279,7 @@ export function attachRealtime(server: Server): void {
 
       ws.on("pong", () => (client.alive = true));
       ws.on("message", (raw) => {
+        client.alive = true;
         let msg: ClientMessage;
         try {
           msg = JSON.parse(String(raw));
@@ -239,6 +289,8 @@ export function attachRealtime(server: Server): void {
         handle(id, client, msg).catch((err) => console.error("[realtime]", err));
       });
       ws.on("close", () => {
+        // Уже убран при переподключении того же браузера — второй раз «вышел» не объявляем.
+        if (clients.get(id) !== client) return;
         clients.delete(id);
         if (client.participant) broadcast({ t: "left", id });
         setOccupancy(participants().length);
@@ -265,5 +317,6 @@ export function attachRealtime(server: Server): void {
     clients.clear();
     history = [];
     controlByUid = new Map();
+    seenCids = new Set();
   });
 }

@@ -111,15 +111,19 @@ export interface IceConfig {
 }
 
 // ---------- клиент → сервер ----------
+// Сообщения, которые нельзя терять при обрыве связи, несут cid. Сервер отвечает на них ack;
+// пока ack нет, браузер хранит сообщение и повторяет его после переподключения, а сервер
+// по cid отбрасывает повтор того, что уже успел получить.
 export type ClientMessage =
-  | { t: "hello"; name: string; color: string; micOn: boolean; key: string }
-  | { t: "chat"; text: string; replyTo?: string }
-  | { t: "edit"; id: string; text: string }
-  | { t: "react"; id: string; emoji: string }
+  // resume — id прошлого подключения этого же браузера: сервер сразу убирает «призрака».
+  | { t: "hello"; name: string; color: string; micOn: boolean; key: string; resume?: string }
+  | { t: "chat"; text: string; replyTo?: string; cid?: string }
+  | { t: "edit"; id: string; text: string; cid?: string }
+  | { t: "react"; id: string; emoji: string; cid?: string }
   | { t: "reaction"; emoji: string }
   | { t: "mic"; on: boolean }
   | { t: "hb-user"; hbUserId: string }
-  | { t: "set-control"; participantId: string; canControl: boolean }
+  | { t: "set-control"; participantId: string; canControl: boolean; cid?: string }
   | { t: "signal"; to: string; data: SignalData }
   | { t: "ping"; at: number };
 
@@ -135,6 +139,7 @@ export type ServerMessage =
   | { t: "signal"; from: string; data: SignalData }
   | { t: "room-ended"; reason: string }
   | { t: "pong"; at: number }
+  | { t: "ack"; cid: string }
   | { t: "error"; message: string };
 
 export type SignalData =
