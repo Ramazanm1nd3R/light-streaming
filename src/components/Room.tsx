@@ -211,7 +211,13 @@ export function Room(props: Props) {
   // На компьютере панели стоят в чёрных полосах над и под видео и ничего не перекрывают.
   const overlayMode = layout === "landscape";
   // В вертикальном режиме прячутся только кнопки плеера поверх видео, шапка и чат остаются.
-  const ui = useAutoHide(!sheet && !typing && !picker && streamState !== "connecting");
+  // Набор сообщения и выбор реакции держат слои видимыми только у горизонтального телефона:
+  // там поле ввода и реакции лежат поверх видео. В остальных раскладках они вне видео, а поле
+  // чата остаётся в фокусе и после отправки (на iPad — даже со спрятанной клавиатурой), и
+  // кнопка паузы иначе висела бы над видео бесконечно, не уходя и по тапу.
+  const ui = useAutoHide(!sheet && !(overlayMode && (typing || picker)) && streamState !== "connecting");
+  // Пока печатаешь на горизонтальном телефоне, кнопки плеера по центру видео не нужны.
+  const playerKeysVisible = ui.visible && !(overlayMode && typing);
 
   // После поворота телефона сразу показываем управление, чтобы не гадать, куда нажимать.
   const showUi = ui.show;
@@ -427,7 +433,7 @@ export function Room(props: Props) {
       streamState={streamState}
       controlMode={controlActive}
       showControlPill={touch}
-      overlayVisible={ui.visible}
+      overlayVisible={playerKeysVisible}
       reactions={session.reactions}
       onTap={ui.toggle}
       onKey={pressKey}
