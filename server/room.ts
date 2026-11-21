@@ -1,14 +1,18 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { config, demoMode } from "./config.ts";
-import { createSession, endSession, isSessionAlive } from "./hyperbeam.ts";
+import { createSession, endSession, isSessionAlive, listSessions, outcomeUnknown } from "./hyperbeam.ts";
 import type { RoomInfo, RoomOptions } from "../shared/protocol.ts";
 
-// Последняя созданная сессия пишется на диск. Если ноутбук выключили, не закрыв
+// Текущая сессия и всё, что ещё надо закрыть, пишется на диск. Если ноутбук выключили, не закрыв
 // комнату, то при следующем старте сервер найдёт «осиротевшую» облачную сессию и
 // завершит её, чтобы она не тратила минуты.
 // Файл привязан к порту, чтобы второй экземпляр сервера (например, тестовый) не закрыл чужую сессию.
 const SESSION_FILE = new URL(`../.session-${config.port}.json`, import.meta.url);
+// Как часто повторять уборку, пока сеть или Hyperbeam недоступны.
+const JANITOR_MS = Number(process.env.JANITOR_MS) || 30_000;
+// Запас на расхождение часов ноутбука и Hyperbeam, когда ищем сессию по времени создания.
+const CLOCK_SLACK_MS = 60_000;
 
 export interface Room extends RoomInfo {
   /** Секрет создателя комнаты: даёт права ведущего (закрыть без пароля, раздавать управление). */
@@ -28,6 +32,16 @@ let pending: Promise<Room> | null = null;
 let emptyTimer: NodeJS.Timeout | undefined;
 let monitorTimer: NodeJS.Timeout | undefined;
 const endListeners = new Set<(reason: string) => void>();
+
+// Без связи облачные браузеры остаются висеть и тратить минуты: закрыть сессию не удалось, или
+// запрос на создание дошёл до Hyperbeam, а ответ с номером сессии — нет. Такие сессии запоминаем
+// и добиваем, когда сеть вернётся.
+/** Сессии, которые надо закрыть. */
+const toEnd = new Set<string>();
+/** Промежутки времени, когда запуск мог создать сессию, о которой мы не знаем. */
+let blindSpots: { from: number; to: number }[] = [];
+let janitorTimer: NodeJS.Timeout | undefined;
+let janitorRunning = false;
 
 export function getRoom(): Room | null {
   return current;
@@ -69,9 +83,19 @@ export async function startRoom(options: RoomOptions, hostName: string): Promise
       return { ...base, embedUrl: "", demo: true, stream: null, sessionId: null, adminToken: null };
     }
 
-    const session = await createSession(options);
-    // PID владельца: другой экземпляр сервера никогда не закроет сессию живого процесса.
-    await writeFile(SESSION_FILE, JSON.stringify({ sessionId: session.session_id, pid: process.pid }), "utf8");
+    const startedAt = Date.now();
+    let session: Awaited<ReturnType<typeof createSession>>;
+    try {
+      session = await createSession(options);
+    } catch (err) {
+      if (outcomeUnknown(err)) {
+        console.warn("[room] запуск без ответа — проверю позже, не остался ли облачный браузер");
+        blindSpots.push({ from: startedAt, to: Date.now() });
+        await saveState();
+        scheduleJanitor(0);
+      }
+      throw err;
+    }
     return {
       ...base,
       embedUrl: session.embed_url,
@@ -87,6 +111,7 @@ export async function startRoom(options: RoomOptions, hostName: string): Promise
   } finally {
     pending = null;
   }
+  await saveState();
   // Создатель может так и не войти (закрыл вкладку) — пустая комната закроется сама.
   setOccupancy(0);
   startMonitor();
@@ -107,9 +132,13 @@ export async function stopRoom(reason = "Ведущий завершил про�
   const room = finish(reason);
   if (!room) return;
   if (room.sessionId) {
-    await endSession(room.sessionId).catch((err) => console.error("[room] не удалось закрыть сессию:", err));
+    await endSession(room.sessionId).catch((err) => {
+      console.error("[room] не удалось закрыть сессию, повторю позже:", String(err));
+      toEnd.add(room.sessionId!);
+      scheduleJanitor();
+    });
   }
-  await rm(SESSION_FILE, { force: true });
+  await saveState();
 }
 
 /**
@@ -137,7 +166,7 @@ function startMonitor(): void {
     if (!alive && current === room) {
       console.log("[room] Hyperbeam завершил облачную сессию — закрываю комнату");
       finish("Облачная сессия завершилась");
-      void rm(SESSION_FILE, { force: true });
+      void saveState();
     }
   }, 30_000);
 }
@@ -151,23 +180,104 @@ function isAlive(pid: number): boolean {
   }
 }
 
+interface SavedState {
+  pid?: number;
+  sessionId?: string | null;
+  toEnd?: string[];
+  blindSpots?: { from: number; to: number }[];
+}
+
+/** Записать на диск, что надо закрыть, если сервер упадёт. Нечего закрывать — файла нет. */
+async function saveState(): Promise<void> {
+  if (demoMode) return;
+  const state: SavedState = {
+    // PID владельца: другой экземпляр сервера никогда не закроет сессию живого процесса.
+    pid: process.pid,
+    sessionId: current?.sessionId ?? null,
+    toEnd: [...toEnd],
+    blindSpots,
+  };
+  try {
+    if (!state.sessionId && !toEnd.size && !blindSpots.length) await rm(SESSION_FILE, { force: true });
+    else await writeFile(SESSION_FILE, JSON.stringify(state), "utf8");
+  } catch (err) {
+    console.error("[room] не удалось сохранить состояние сессий:", String(err));
+  }
+}
+
+function scheduleJanitor(delay = JANITOR_MS): void {
+  if (demoMode || janitorTimer) return;
+  janitorTimer = setTimeout(() => {
+    janitorTimer = undefined;
+    void tidy();
+  }, delay);
+  janitorTimer.unref?.();
+}
+
+/**
+ * Закрыть то, что не удалось закрыть раньше, и найти сессии от запусков без ответа: активные
+ * сессии этого ключа, созданные в те моменты, и не принадлежащие текущей комнате. Пока сеть
+ * или Hyperbeam недоступны, повторяем каждые JANITOR_MS.
+ */
+async function tidy(): Promise<void> {
+  if (janitorRunning) return;
+  janitorRunning = true;
+  try {
+    // Пока идёт запуск, его сессия уже может быть в списке — подождём, чтобы не закрыть её.
+    if (blindSpots.length && !pending) {
+      try {
+        const spots = blindSpots;
+        for (const s of await listSessions()) {
+          const at = Date.parse(s.creation_date);
+          const suspicious = spots.some((w) => at >= w.from - CLOCK_SLACK_MS && at <= w.to + CLOCK_SLACK_MS);
+          if (suspicious && s.id !== current?.sessionId) toEnd.add(s.id);
+        }
+        blindSpots = blindSpots.filter((w) => !spots.includes(w));
+      } catch {
+        // список не получили — попробуем в следующий раз
+      }
+    }
+    for (const id of [...toEnd]) {
+      if (id === current?.sessionId) {
+        toEnd.delete(id);
+        continue;
+      }
+      try {
+        await endSession(id);
+        toEnd.delete(id);
+        console.log(`[room] закрыл повисшую облачную сессию ${id}`);
+      } catch {
+        // сеть ещё не вернулась — попробуем в следующий раз
+      }
+    }
+    await saveState();
+  } finally {
+    janitorRunning = false;
+  }
+  if (toEnd.size || blindSpots.length) scheduleJanitor();
+}
+
 /** Вызывать только после того, как сервер занял порт, — иначе можно закрыть комнату работающего сервера. */
 export async function cleanupOrphanSession(): Promise<void> {
   if (demoMode) return;
+  let saved: SavedState = {};
   try {
-    const { sessionId, pid } = JSON.parse(await readFile(SESSION_FILE, "utf8")) as { sessionId?: string; pid?: number };
-    if (pid && pid !== process.pid && isAlive(pid)) {
-      console.warn(`[room] сессия ${sessionId} принадлежит работающему процессу ${pid} — не трогаю`);
-      return;
-    }
-    if (sessionId) {
-      console.log(`[room] закрываю сессию, оставшуюся с прошлого запуска: ${sessionId}`);
-      await endSession(sessionId);
-    }
+    saved = JSON.parse(await readFile(SESSION_FILE, "utf8")) as SavedState;
   } catch {
     // Файла нет — значит, прошлый запуск завершился корректно.
+    return;
   }
-  await rm(SESSION_FILE, { force: true });
+  if (saved.pid && saved.pid !== process.pid && isAlive(saved.pid)) {
+    console.warn(`[room] сессия ${saved.sessionId} принадлежит работающему процессу ${saved.pid} — не трогаю`);
+    return;
+  }
+  if (saved.sessionId) {
+    console.log(`[room] закрываю сессию, оставшуюся с прошлого запуска: ${saved.sessionId}`);
+    toEnd.add(saved.sessionId);
+  }
+  for (const id of saved.toEnd ?? []) toEnd.add(id);
+  blindSpots.push(...(saved.blindSpots ?? []));
+  await tidy();
 }
 
 export function iceServers(): RTCIceServer[] {

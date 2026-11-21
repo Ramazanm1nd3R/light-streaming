@@ -31,7 +31,8 @@ export interface TestServer {
 }
 
 export async function startServer(env: Record<string, string> = {}): Promise<TestServer> {
-  const port = await freePort();
+  // Свой PORT нужен, чтобы перезапустить сервер на том же месте (файл сессии привязан к порту).
+  const port = env.PORT ? Number(env.PORT) : await freePort();
   const logs: string[] = [];
   const proc: ChildProcess = spawn(process.execPath, [TSX, "server/index.ts"], {
     cwd: ROOT,

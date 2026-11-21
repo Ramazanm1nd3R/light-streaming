@@ -1,12 +1,32 @@
 import { config } from "./config.ts";
 import type { RoomOptions } from "../shared/protocol.ts";
 
-const API = "https://engine.hyperbeam.com/v0";
+// Адрес API меняется только в тестах — там вместо Hyperbeam поднимается поддельный сервер.
+const API = process.env.HYPERBEAM_API_URL?.trim() || "https://engine.hyperbeam.com/v0";
 
 export interface HyperbeamSession {
   session_id: string;
   embed_url: string;
   admin_token: string;
+}
+
+/** Ответ Hyperbeam с ошибкой. Без ответа вовсе (обрыв сети, таймаут) летит обычная ошибка fetch. */
+export class HyperbeamError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Неизвестно, выполнил ли Hyperbeam запрос: ответа не было (сеть пропала, таймаут) или его
+ * сервер упал на полпути (5xx). Для создания сессии это значит, что облачный браузер мог
+ * запуститься и тратить минуты, а мы о нём ничего не знаем.
+ */
+export function outcomeUnknown(err: unknown): boolean {
+  return !(err instanceof HyperbeamError) || err.status >= 500;
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -21,10 +41,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Hyperbeam ${method} ${path} → ${res.status} ${text}`.trim());
+    throw new HyperbeamError(`Hyperbeam ${method} ${path} → ${res.status} ${text}`.trim(), res.status);
   }
   return (await res.json()) as T;
 }
+
+// Hyperbeam ограничивает частые запуски (429 err_too_many_vm_requests), и каждая новая попытка
+// во время ограничения может его продлить. Поэтому после 429 минуту не беспокоим его вовсе.
+const RATE_LIMIT_PAUSE_MS = 60_000;
+let rateLimitedUntil = 0;
 
 // Профиль, доступный любому ключу. Если ключ однажды отказал в большем, дальше просим сразу его:
 // лишний запрос замедляет создание комнаты и расходует лимит Hyperbeam на создание сессий.
@@ -32,6 +57,19 @@ const BASIC_PROFILE: StreamProfile = { width: 1280, height: 720, fps: 30 };
 let keyRestricted = false;
 
 export async function createSession(options: RoomOptions): Promise<HyperbeamSession & { stream: StreamProfile }> {
+  const wait = rateLimitedUntil - Date.now();
+  if (wait > 0) {
+    throw new HyperbeamError(`Hyperbeam POST /vm → 429 err_too_many_vm_requests (пауза ещё ${Math.ceil(wait / 1000)} с)`, 429);
+  }
+  try {
+    return await createSessionOnce(options);
+  } catch (err) {
+    if (err instanceof HyperbeamError && err.status === 429) rateLimitedUntil = Date.now() + RATE_LIMIT_PAUSE_MS;
+    throw err;
+  }
+}
+
+async function createSessionOnce(options: RoomOptions): Promise<HyperbeamSession & { stream: StreamProfile }> {
   if (keyRestricted) return { ...(await requestSession(options, BASIC_PROFILE)), stream: BASIC_PROFILE };
   const wanted: StreamProfile = { width: 1920, height: 1080, fps: options.fps };
   try {
@@ -92,17 +130,32 @@ export async function isSessionAlive(sessionId: string): Promise<boolean> {
     const session = await request<{ termination_date: string | null }>("GET", `/vm/${sessionId}`);
     return !session.termination_date;
   } catch (err) {
-    if (String(err).includes("404")) return false;
+    if (err instanceof HyperbeamError && err.status === 404) return false;
     throw err;
   }
+}
+
+/** Активные сессии этого ключа API (Hyperbeam отдаёт до 100 за раз). */
+export async function listSessions(): Promise<{ id: string; creation_date: string }[]> {
+  const all: { id: string; creation_date: string }[] = [];
+  let after = "";
+  for (let page = 0; page < 20; page++) {
+    const query = after ? `?after_id=${encodeURIComponent(after)}` : "";
+    const { results } = await request<{ results: { id: string; creation_date: string }[] | null }>("GET", `/vm${query}`);
+    const batch = results ?? [];
+    all.push(...batch);
+    if (batch.length < 100) break;
+    after = batch[batch.length - 1].id;
+  }
+  return all;
 }
 
 export async function endSession(sessionId: string): Promise<void> {
   try {
     await request("DELETE", `/vm/${sessionId}`);
   } catch (err) {
-    // 404 означает, что сессия уже завершилась по таймауту — это нормально.
-    if (!String(err).includes("404")) throw err;
+    // 404 — сессия уже завершилась по таймауту, 400 — уже завершается или завершена. Это нормально.
+    if (!(err instanceof HyperbeamError && (err.status === 404 || err.status === 400))) throw err;
   }
 }
 
